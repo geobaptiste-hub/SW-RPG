@@ -15,6 +15,7 @@ class SoundFileService {
   SoundFileService({List<String>? roots}) : roots = roots ?? _defaultRoots();
 
   static List<String> _defaultRoots() {
+    if (kIsWeb) return [];
     final List<String> roots = <String>[Directory.current.path];
     try {
       FileSystemEntity directory = File('').parent;
@@ -32,6 +33,7 @@ class SoundFileService {
   /// [relative] exclut l'extension (la première trouvée parmi .mp3/.wav/.ogg
   /// est retournée).
   File? resolveFile(String relative) {
+    if (kIsWeb) return null;
     if (_cache.containsKey(relative)) return _cache[relative];
     File? found;
     const List<String> extensions = <String>['.mp3', '.wav', '.ogg'];
