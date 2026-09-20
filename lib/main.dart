@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -19,7 +20,7 @@ Future<void> main() async {
   // Plein écran au démarrage sur desktop (retours playtest : l'app visait
   // une fenêtre réduite). Ignoré sur mobile/tablette, où le plein écran
   // est natif. Réglage persisté : désactivable dans les Paramètres.
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+  if (!kIsWeb && (!kIsWeb)) {
     await windowManager.ensureInitialized();
     final bool fullScreen =
         await SettingsService().loadFullScreenEnabled();

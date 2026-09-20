@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,7 +24,7 @@ class ImageService {
   static List<String> _defaultRoots() {
     final List<String> roots = <String>[Directory.current.path];
     try {
-      FileSystemEntity directory = File(Platform.resolvedExecutable).parent;
+      FileSystemEntity directory = File('').parent;
       for (int i = 0; i < 6; i++) {
         roots.add(directory.path);
         directory = directory.parent;
@@ -44,9 +45,9 @@ class ImageService {
     loop:
     for (final String root in roots) {
       final String base =
-          '$root${root.endsWith(Platform.pathSeparator) ? '' : Platform.pathSeparator}'
-          'assets${Platform.pathSeparator}images${Platform.pathSeparator}'
-          '$category${Platform.pathSeparator}$id';
+          '$root${root.endsWith('/') ? '' : '/'}'
+          'assets${'/'}images${'/'}'
+          '$category${'/'}$id';
       for (final String ext in const <String>['.png', '.jpg', '.jpeg']) {
         final File candidate = File(base + ext);
         if (candidate.existsSync()) {
@@ -71,8 +72,8 @@ class ImageService {
     loop:
     for (final String root in roots) {
       final String base =
-          '$root${root.endsWith(Platform.pathSeparator) ? '' : Platform.pathSeparator}'
-          'assets${Platform.pathSeparator}images${Platform.pathSeparator}'
+          '$root${root.endsWith('/') ? '' : '/'}'
+          'assets${'/'}images${'/'}'
           '$relativePath';
       for (final String ext in const <String>['.png', '.jpg', '.jpeg']) {
         final File candidate = File(base + ext);

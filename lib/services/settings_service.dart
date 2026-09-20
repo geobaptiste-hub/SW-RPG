@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -123,7 +124,7 @@ class FullScreenController extends Notifier<bool> {
 
   Future<void> set(bool value) async {
     state = value;
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    if (!kIsWeb && (!kIsWeb)) {
       await windowManager.setFullScreen(value);
     }
     await ref.read(settingsServiceProvider).setFullScreenEnabled(value);

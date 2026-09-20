@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,7 +17,7 @@ class SoundFileService {
   static List<String> _defaultRoots() {
     final List<String> roots = <String>[Directory.current.path];
     try {
-      FileSystemEntity directory = File(Platform.resolvedExecutable).parent;
+      FileSystemEntity directory = File('').parent;
       for (int i = 0; i < 6; i++) {
         roots.add(directory.path);
         directory = directory.parent;
@@ -37,8 +38,8 @@ class SoundFileService {
     loop:
     for (final String root in roots) {
       final String base =
-          '$root${root.endsWith(Platform.pathSeparator) ? '' : Platform.pathSeparator}'
-          'assets${Platform.pathSeparator}audio${Platform.pathSeparator}'
+          '$root${root.endsWith('/') ? '' : '/'}'
+          'assets${'/'}audio${'/'}'
           '$relative';
       for (final String ext in extensions) {
         final File candidate = File(base + ext);

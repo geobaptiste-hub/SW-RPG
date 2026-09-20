@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -53,7 +54,7 @@ class SettingsScreen extends ConsumerWidget {
     final bool music = ref.watch(musicEnabledProvider);
     final bool fullScreen = ref.watch(fullScreenProvider);
     final bool isDesktop =
-        Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+        !kIsWeb;
     final AsyncValue<bool> hasSave = ref.watch(hasSaveProvider);
 
     return Scaffold(
