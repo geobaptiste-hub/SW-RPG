@@ -1,23 +1,22 @@
 import 'dart:io';
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'settings_service.dart';
+import 'sound_backend.dart';
 import 'sound_file_service.dart';
 
 /// Lecture de la MUSIQUE (une piste en boucle par écran) et des EFFETS
 /// sonores.
 ///
-/// Deux modes (fix web 19/09) :
+/// Deux modes (fix web 20/09 — voir [SoundBackend]) :
 ///  - DESKTOP : fichiers résolus sur le disque par [SoundFileService] —
 ///    déposer `assets/audio/music/<écran>/<piste>.mp3` suffit, sans
 ///    recompilation ;
 ///  - WEB : les fichiers viennent du BUNDLE Flutter (déclarés dans
-///    pubspec.yaml) via [AssetSource] — les .mp3 doivent être présents
-///    au build (pas de dépôt à chaud possible sur le web).
+///    pubspec.yaml), joués par des éléments <audio> directs.
 ///
 /// Rien n'est joué si le fichier est absent ou si le réglage
 /// correspondant est désactivé ; à chaque changement de piste,
@@ -25,39 +24,34 @@ import 'sound_file_service.dart';
 class SoundController {
   final Ref ref;
 
-  AudioPlayer? _musicPlayer;
+  final SoundBackend _backend = SoundBackend();
   String? _currentTrack;
-  Source? _currentSource;
-
-  /// Dernière piste pour laquelle la relecture web a été forcée
-  /// ([resumeWebAudio] — une fois par piste suffit).
-  String? _webAudioResumedForTrack;
+  String? _currentLoopUrl;
 
   SoundController(this.ref);
 
   bool get _hiveReady => Hive.isBoxOpen('settings');
 
-  /// Source multiplateforme pour une piste musique `music/<nom>` :
-  /// fichier disque sur desktop, asset du bundle sur web. Note : sur web,
-  /// [AssetSource] préfixe déjà `assets/` — il faut donc passer le chemin
-  /// COMPLET (`assets/audio/...`).
-  Source? _musicSource(String name) {
+  /// URL/chemin d'une piste musique `music/<nom>` : chemin absolu du
+  /// fichier (desktop, null si absent) ou URL relative du bundle (web).
+  String? _musicUrl(String name) {
     if (kIsWeb) {
-      return AssetSource('assets/audio/music/$name.mp3');
+      return 'assets/assets/audio/music/$name.mp3';
     }
     final SoundFileService files = ref.read(soundFileServiceProvider);
     final File? file = files.resolveFile('music/$name/$name') ??
         files.resolveFile('music/$name');
-    return file == null ? null : DeviceFileSource(file.path);
+    return file?.path;
   }
 
-  /// Source multiplateforme pour un effet `sfx/<nom>`.
-  Source? _sfxSource(String name) {
+  /// URL/chemin d'un effet `sfx/<nom>`.
+  String? _sfxUrl(String name) {
     if (kIsWeb) {
-      return AssetSource('assets/audio/sfx/$name.mp3');
+      return 'assets/assets/audio/sfx/$name.mp3';
     }
-    final File? file = ref.read(soundFileServiceProvider).resolveFile('sfx/$name');
-    return file == null ? null : DeviceFileSource(file.path);
+    final File? file =
+        ref.read(soundFileServiceProvider).resolveFile('sfx/$name');
+    return file?.path;
   }
 
   /// Joue en boucle la musique d'un écran : `accueil`, `credits`,
@@ -69,7 +63,7 @@ class SoundController {
   /// la cantina qui jouait encore après la sortie).
   Future<void> playScreenMusic(String name) async {
     try {
-      if (_currentTrack == name && _musicPlayer != null) return;
+      if (_currentTrack == name && _currentLoopUrl != null) return;
       if (!_hiveReady) return;
       final bool music =
           await ref.read(settingsServiceProvider).loadMusicEnabled();
@@ -77,84 +71,54 @@ class SoundController {
           await ref.read(settingsServiceProvider).loadSoundEnabled();
       if (!music || !sound) {
         _currentTrack = null;
-        await _musicPlayer?.stop();
+        _currentLoopUrl = null;
+        await _backend.stopLoop();
         return;
       }
       // Deux emplacements acceptés : music/<écran>/<écran>.mp3 (un
       // dossier par écran) ou music/<écran>.mp3 (à plat).
-      final Source? source = _musicSource(name);
+      final String? url = _musicUrl(name);
       // La piste demandée est enregistrée MÊME si son fichier manque :
       // le prochain changement de piste coupera donc bien celle-ci.
-      final bool wasPlaying = _currentTrack != null;
       _currentTrack = name;
-      _currentSource = source;
-      if (source == null) {
-        await _musicPlayer?.stop();
+      _currentLoopUrl = url;
+      if (url == null) {
+        await _backend.stopLoop();
         return;
       }
-
-      _musicPlayer ??= AudioPlayer();
-      await _musicPlayer!.setReleaseMode(ReleaseMode.loop);
-      if (wasPlaying) {
-        await _musicPlayer!.stop();
-      }
-      await _musicPlayer!.play(source);
+      await _backend.playLoop(url);
     } catch (_) {
       // Silencieux : le son est optionnel (Hive indisponible en tests, pas
       // de périphérique audio, fichier illisible…).
     }
   }
 
-  /// WEB / Safari uniquement : l'autoplay est bloqué avant la première
-  /// interaction — la musique lancée au chargement reste muette (et
-  /// l'état du player peut rester optimistiquement « playing »). Au
-  /// premier toucher : on FORCE la relecture de la piste courante.
+  /// WEB uniquement : l'autoplay est bloqué avant la première interaction
+  /// — la musique lancée au chargement reste muette. Appelé au premier
+  /// toucher de l'utilisateur (écran Accueil) : reprend la boucle
+  /// courante. No-op sur desktop.
   Future<void> resumeWebAudio() async {
-    if (!kIsWeb) return;
-    final AudioPlayer? player = _musicPlayer;
-    final Source? source = _currentSource;
-    if (player == null || source == null) return;
-    // Une seule relecture forcée par piste : ensuite, l'état du player
-    // est fiable (le premier play est passé par un geste utilisateur).
-    if (_webAudioResumedForTrack == _currentTrack &&
-        player.state == PlayerState.playing) {
-      return;
-    }
-    _webAudioResumedForTrack = _currentTrack;
-    try {
-      await player.stop();
-      await player.play(source);
-    } catch (_) {
-      // Silencieux.
-    }
+    await _backend.resumeLoop();
   }
 
   /// Coupe la musique (entrée en partie, réglage désactivé…).
   Future<void> stopMusic() async {
     _currentTrack = null;
-    _currentSource = null;
-    try {
-      await _musicPlayer?.stop();
-    } catch (_) {
-      // Silencieux.
-    }
+    _currentLoopUrl = null;
+    await _backend.stopLoop();
   }
 
   /// Joue un effet sonore `assets/audio/sfx/<name>` (si activé et si le
-  /// fichier existe). Le player est libéré après la lecture.
+  /// fichier existe).
   Future<void> playSfx(String name) async {
     if (!_hiveReady) return;
     try {
       final bool sound =
           await ref.read(settingsServiceProvider).loadSoundEnabled();
       if (!sound) return;
-      final Source? source = _sfxSource(name);
-      if (source == null) return;
-      final AudioPlayer player = AudioPlayer();
-      await player.play(source);
-      player.onPlayerComplete.first.then((_) {
-        player.dispose();
-      });
+      final String? url = _sfxUrl(name);
+      if (url == null) return;
+      await _backend.playOnce(url);
     } catch (_) {
       // Silencieux : le son est optionnel (Hive indisponible en tests, pas
       // de périphérique audio, fichier illisible…).

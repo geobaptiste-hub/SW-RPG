@@ -183,13 +183,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       onPressed: () => context.go('/credits'),
                     ),
                     const SizedBox(height: 14),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.exit_to_app,
-                          color: AppColors.gold),
-                      label: const Text('Quitter le jeu'),
-                      style: cardButtonStyle,
-                      onPressed: _quitGame,
-                    ),
+                    // WEB : un onglet navigateur ne peut pas se fermer
+                    // par script (SystemNavigator.pop y est sans effet) —
+                    // le bouton n'a de sens que sur desktop.
+                    if (!kIsWeb)
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.exit_to_app,
+                            color: AppColors.gold),
+                        label: const Text('Quitter le jeu'),
+                        style: cardButtonStyle,
+                        onPressed: _quitGame,
+                      ),
                     const SizedBox(height: 32),
                   ],
                 ),
