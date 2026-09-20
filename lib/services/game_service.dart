@@ -199,7 +199,10 @@ class GameController extends Notifier<GameState?> {
   /// (CDC §4), place les joueurs, applique le brouillard, tire le premier
   /// joueur au hasard, puis sauvegarde.
   Future<GameState> createNewGame(NewGameConfig config) async {
-    final int seed = _diceRandom.nextInt(1 << 32);
+    // FIX web 19/09 : `1 << 32` est évalué à 0 par les opérations 32 bits
+    // de JavaScript (dart2js) — `nextInt(0)` lançait une RangeError et la
+    // création de partie échouait sur l'iPad. Borne explicite sûre partout.
+    final int seed = _diceRandom.nextInt(0x7FFFFFFF);
     final Planet planet =
         _mapService.generateStartPlanet(config.planetType, seed: seed);
 

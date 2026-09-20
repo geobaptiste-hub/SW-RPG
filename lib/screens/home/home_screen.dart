@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../services/game_service.dart';
+import '../../services/sound_service.dart';
 import '../../widgets/app_background.dart';
 import '../../widgets/screen_music.dart';
 
@@ -94,16 +95,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
 
     return Scaffold(
-      body: ScreenMusic(
-        track: 'accueil',
-        child: AppBackground(
-          child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
+      // WEB / Safari : l'autoplay audio est bloqué avant la première
+      // interaction — le premier toucher sur l'écran relance la musique
+      // (no-op sur desktop).
+      body: Listener(
+        onPointerDown: (_) =>
+            ref.read(soundControllerProvider).resumeWebAudio(),
+        child: ScreenMusic(
+          track: 'accueil',
+          child: AppBackground(
+            child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -192,6 +199,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       ),
         ),
+      ),
     );
   }
 }

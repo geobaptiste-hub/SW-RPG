@@ -27,6 +27,7 @@ class SoundController {
 
   AudioPlayer? _musicPlayer;
   String? _currentTrack;
+  Source? _currentSource;
 
   SoundController(this.ref);
 
@@ -82,6 +83,7 @@ class SoundController {
       // le prochain changement de piste coupera donc bien celle-ci.
       final bool wasPlaying = _currentTrack != null;
       _currentTrack = name;
+      _currentSource = source;
       if (source == null) {
         await _musicPlayer?.stop();
         return;
@@ -99,9 +101,26 @@ class SoundController {
     }
   }
 
+  /// WEB / Safari uniquement : l'autoplay est bloqué avant la première
+  /// interaction — la musique lancée au chargement reste muette. À appeler
+  /// au premier toucher de l'utilisateur : relance la piste courante.
+  Future<void> resumeWebAudio() async {
+    if (!kIsWeb) return;
+    final AudioPlayer? player = _musicPlayer;
+    final Source? source = _currentSource;
+    if (player == null || source == null) return;
+    try {
+      if (player.state == PlayerState.playing) return;
+      await player.resume();
+    } catch (_) {
+      // Silencieux.
+    }
+  }
+
   /// Coupe la musique (entrée en partie, réglage désactivé…).
   Future<void> stopMusic() async {
     _currentTrack = null;
+    _currentSource = null;
     try {
       await _musicPlayer?.stop();
     } catch (_) {
