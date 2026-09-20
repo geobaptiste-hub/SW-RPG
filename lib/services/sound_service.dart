@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart'
+    show AssetManifest, rootBundle;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,11 +34,44 @@ class SoundController {
 
   bool get _hiveReady => Hive.isBoxOpen('settings');
 
+  /// Clés des assets du bundle (web — chargées une fois) : permet de
+  /// choisir entre les deux conventions de dépôt possibles.
+  Set<String>? _bundledAssets;
+
+  Future<void> _ensureBundleManifest() async {
+    if (!kIsWeb || _bundledAssets != null) return;
+    try {
+      final AssetManifest manifest =
+          await AssetManifest.loadFromAssetBundle(rootBundle);
+      _bundledAssets = manifest.listAssets().toSet();
+    } catch (_) {
+      _bundledAssets = null;
+    }
+  }
+
+  /// Web : première clé candidate réellement présente dans le bundle.
+  /// Les clés du manifest incluent le préfixe `assets/` (ce sont les
+  /// chemins déclarés dans pubspec) ; l'URL servie vaut `assets/` + clé.
+  String? _bundledAudioUrl(List<String> candidateKeys) {
+    final Set<String>? keys = _bundledAssets;
+    if (keys == null) return 'assets/${candidateKeys.first}';
+    for (final String key in candidateKeys) {
+      if (keys.contains(key)) return 'assets/$key';
+    }
+    return null;
+  }
+
   /// URL/chemin d'une piste musique `music/<nom>` : chemin absolu du
   /// fichier (desktop, null si absent) ou URL relative du bundle (web).
-  String? _musicUrl(String name) {
+  /// Deux conventions de dépôt acceptées : `music/<nom>/<nom>.mp3`
+  /// (dossier dédié — écrans) ou `music/<nom>.mp3` (à plat — planètes).
+  Future<String?> _musicUrl(String name) async {
     if (kIsWeb) {
-      return 'assets/assets/audio/music/$name.mp3';
+      await _ensureBundleManifest();
+      return _bundledAudioUrl(<String>[
+        'assets/audio/music/$name/$name.mp3',
+        'assets/audio/music/$name.mp3',
+      ]);
     }
     final SoundFileService files = ref.read(soundFileServiceProvider);
     final File? file = files.resolveFile('music/$name/$name') ??
@@ -45,9 +80,10 @@ class SoundController {
   }
 
   /// URL/chemin d'un effet `sfx/<nom>`.
-  String? _sfxUrl(String name) {
+  Future<String?> _sfxUrl(String name) async {
     if (kIsWeb) {
-      return 'assets/assets/audio/sfx/$name.mp3';
+      await _ensureBundleManifest();
+      return _bundledAudioUrl(<String>['assets/audio/sfx/$name.mp3']);
     }
     final File? file =
         ref.read(soundFileServiceProvider).resolveFile('sfx/$name');
@@ -77,7 +113,7 @@ class SoundController {
       }
       // Deux emplacements acceptés : music/<écran>/<écran>.mp3 (un
       // dossier par écran) ou music/<écran>.mp3 (à plat).
-      final String? url = _musicUrl(name);
+      final String? url = await _musicUrl(name);
       // La piste demandée est enregistrée MÊME si son fichier manque :
       // le prochain changement de piste coupera donc bien celle-ci.
       _currentTrack = name;
@@ -116,7 +152,7 @@ class SoundController {
       final bool sound =
           await ref.read(settingsServiceProvider).loadSoundEnabled();
       if (!sound) return;
-      final String? url = _sfxUrl(name);
+      final String? url = await _sfxUrl(name);
       if (url == null) return;
       await _backend.playOnce(url);
     } catch (_) {
