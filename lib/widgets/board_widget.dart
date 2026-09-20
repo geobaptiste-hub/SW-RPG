@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -361,10 +360,10 @@ class _BoardWidgetState extends State<BoardWidget>
                     // médaillon montre la DESTINATION (retours playtest).
                     Consumer(builder:
                         (BuildContext context, WidgetRef ref, Widget? _) {
-                      final File? planetImage = portal.visited
+                      final ImageProvider? planetImage = portal.visited
                           ? ref
                               .watch(imageServiceProvider)
-                              .resolveFile('planets',
+                              .providerFor('planets',
                                   planetImageId(portal.destination))
                           : null;
                       if (planetImage != null) {
@@ -382,7 +381,7 @@ class _BoardWidgetState extends State<BoardWidget>
                             ],
                           ),
                           child: ClipOval(
-                            child: Image.file(planetImage,
+                            child: Image(image: planetImage,
                                 fit: BoxFit.cover,
                                 errorBuilder: (BuildContext context,
                                         Object error,
@@ -419,10 +418,10 @@ class _BoardWidgetState extends State<BoardWidget>
                   widget.cantina!.anchor,
                   Consumer(builder:
                       (BuildContext context, WidgetRef ref, Widget? _) {
-                    final File? logo = widget.cantina!.visited
+                    final ImageProvider? logo = widget.cantina!.visited
                         ? ref
                             .watch(imageServiceProvider)
-                            .resolveFile('cantina', 'cantina')
+                            .providerFor('cantina', 'cantina')
                         : null;
                     if (widget.cantina!.visited) {
                       return Container(
@@ -442,7 +441,7 @@ class _BoardWidgetState extends State<BoardWidget>
                           child: logo == null
                               ? const Icon(Icons.local_bar,
                                   size: 20, color: AppColors.gold)
-                              : Image.file(logo,
+                              : Image(image: logo,
                                   fit: BoxFit.cover,
                                   errorBuilder: (BuildContext context,
                                           Object error,
@@ -476,11 +475,11 @@ class _BoardWidgetState extends State<BoardWidget>
                         child: Consumer(builder:
                             (BuildContext context, WidgetRef ref,
                                 Widget? _) {
-                          final File? bar = ref
+                          final ImageProvider? bar = ref
                               .watch(imageServiceProvider)
-                              .resolveFile('cantina', 'bar');
+                              .providerFor('cantina', 'bar');
                           if (bar == null) return const SizedBox.shrink();
-                          return Image.file(bar,
+                          return Image(image: bar,
                               fit: BoxFit.cover,
                               errorBuilder: (BuildContext context,
                                       Object error,
@@ -496,9 +495,9 @@ class _BoardWidgetState extends State<BoardWidget>
                 _marker(
                   boss.position,
                   Consumer(builder: (BuildContext context, WidgetRef ref, Widget? _) {
-                    final File? photo = ref
+                    final ImageProvider? photo = ref
                         .watch(imageServiceProvider)
-                        .resolveFile('bosses', bossImageId(boss.type));
+                        .providerFor('bosses', bossImageId(boss.type));
                     return Container(
                       width: 36,
                       height: 36,
@@ -516,7 +515,7 @@ class _BoardWidgetState extends State<BoardWidget>
                         child: photo == null
                             ? Icon(bossIcon(boss.type),
                                 size: 20, color: Colors.white)
-                            : Image.file(photo,
+                            : Image(image: photo,
                                 fit: BoxFit.cover,
                                 errorBuilder: (BuildContext context,
                                         Object error,

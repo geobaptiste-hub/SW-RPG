@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,13 +56,12 @@ class _PlayerCard extends ConsumerWidget {
   });
 
   @override
-  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final TextTheme textTheme = Theme.of(context).textTheme;
     final Color tokenColor = AppColors.playerTokenColor(playerIndex);
-    final File? avatarImage = ref
+    final ImageProvider? avatarImage = ref
         .watch(imageServiceProvider)
-        .resolveFile('characters', slugify(player.name));
+        .providerFor('characters', slugify(player.name));
 
     return Card(
       shape: isActive
@@ -79,8 +77,7 @@ class _PlayerCard extends ConsumerWidget {
             CircleAvatar(
               radius: 22,
               backgroundColor: tokenColor.withValues(alpha: 0.3),
-              foregroundImage:
-                  avatarImage == null ? null : FileImage(avatarImage),
+              foregroundImage: avatarImage,
               child: Text(
                 player.name.characters.first,
                 style: TextStyle(

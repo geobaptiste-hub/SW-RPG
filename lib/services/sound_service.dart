@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,10 +11,17 @@ import 'sound_file_service.dart';
 /// Lecture de la MUSIQUE (une piste en boucle par écran) et des EFFETS
 /// sonores.
 ///
-/// Les fichiers sont résolus sur le disque par [SoundFileService] :
-/// déposer `assets/audio/music/<écran>/<piste>.mp3` suffit, sans
-/// recompilation. Rien n'est joué si le fichier est absent ou si le
-/// réglage correspondant est désactivé.
+/// Deux modes (fix web 19/09) :
+///  - DESKTOP : fichiers résolus sur le disque par [SoundFileService] —
+///    déposer `assets/audio/music/<écran>/<piste>.mp3` suffit, sans
+///    recompilation ;
+///  - WEB : les fichiers viennent du BUNDLE Flutter (déclarés dans
+///    pubspec.yaml) via [AssetSource] — les .mp3 doivent être présents
+///    au build (pas de dépôt à chaud possible sur le web).
+///
+/// Rien n'est joué si le fichier est absent ou si le réglage
+/// correspondant est désactivé ; à chaque changement de piste,
+/// l'ancienne musique est coupée.
 class SoundController {
   final Ref ref;
 
@@ -23,6 +31,29 @@ class SoundController {
   SoundController(this.ref);
 
   bool get _hiveReady => Hive.isBoxOpen('settings');
+
+  /// Source multiplateforme pour une piste musique `music/<nom>` :
+  /// fichier disque sur desktop, asset du bundle sur web. Note : sur web,
+  /// [AssetSource] préfixe déjà `assets/` — il faut donc passer le chemin
+  /// COMPLET (`assets/audio/...`).
+  Source? _musicSource(String name) {
+    if (kIsWeb) {
+      return AssetSource('assets/audio/music/$name.mp3');
+    }
+    final SoundFileService files = ref.read(soundFileServiceProvider);
+    final File? file = files.resolveFile('music/$name/$name') ??
+        files.resolveFile('music/$name');
+    return file == null ? null : DeviceFileSource(file.path);
+  }
+
+  /// Source multiplateforme pour un effet `sfx/<nom>`.
+  Source? _sfxSource(String name) {
+    if (kIsWeb) {
+      return AssetSource('assets/audio/sfx/$name.mp3');
+    }
+    final File? file = ref.read(soundFileServiceProvider).resolveFile('sfx/$name');
+    return file == null ? null : DeviceFileSource(file.path);
+  }
 
   /// Joue en boucle la musique d'un écran : `accueil`, `credits`,
   /// `parametres`, `preparation`, `planetes/hoth`, `lieux/cantina`…
@@ -46,15 +77,12 @@ class SoundController {
       }
       // Deux emplacements acceptés : music/<écran>/<écran>.mp3 (un
       // dossier par écran) ou music/<écran>.mp3 (à plat).
-      final File? file = ref
-              .read(soundFileServiceProvider)
-              .resolveFile('music/$name/$name') ??
-          ref.read(soundFileServiceProvider).resolveFile('music/$name');
+      final Source? source = _musicSource(name);
       // La piste demandée est enregistrée MÊME si son fichier manque :
       // le prochain changement de piste coupera donc bien celle-ci.
       final bool wasPlaying = _currentTrack != null;
       _currentTrack = name;
-      if (file == null) {
+      if (source == null) {
         await _musicPlayer?.stop();
         return;
       }
@@ -64,7 +92,7 @@ class SoundController {
       if (wasPlaying) {
         await _musicPlayer!.stop();
       }
-      await _musicPlayer!.play(DeviceFileSource(file.path));
+      await _musicPlayer!.play(source);
     } catch (_) {
       // Silencieux : le son est optionnel (Hive indisponible en tests, pas
       // de périphérique audio, fichier illisible…).
@@ -89,11 +117,10 @@ class SoundController {
       final bool sound =
           await ref.read(settingsServiceProvider).loadSoundEnabled();
       if (!sound) return;
-      final File? file =
-          ref.read(soundFileServiceProvider).resolveFile('sfx/$name');
-      if (file == null) return;
+      final Source? source = _sfxSource(name);
+      if (source == null) return;
       final AudioPlayer player = AudioPlayer();
-      await player.play(DeviceFileSource(file.path));
+      await player.play(source);
       player.onPlayerComplete.first.then((_) {
         player.dispose();
       });

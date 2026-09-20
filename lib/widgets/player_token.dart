@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,9 +30,9 @@ class PlayerToken extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final double size = BoardConstants.tileExtent * 0.72;
     final Color color = AppColors.playerTokenColor(playerIndex);
-    final File? photo = ref
+    final ImageProvider? photo = ref
         .watch(imageServiceProvider)
-        .resolveFile('characters', slugify(player.name));
+        .providerFor('characters', slugify(player.name));
 
     return Container(
       width: size,
@@ -62,8 +60,8 @@ class PlayerToken extends ConsumerWidget {
           if (photo != null)
             Positioned.fill(
               child: ClipOval(
-                child: Image.file(
-                  photo,
+                child: Image(
+                  image: photo,
                   fit: BoxFit.cover,
                   errorBuilder: (BuildContext context, Object error,
                           StackTrace? stackTrace) =>

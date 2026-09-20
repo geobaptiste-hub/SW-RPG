@@ -1,5 +1,4 @@
-import 'package:flutter/foundation.dart';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -72,7 +71,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    if (!kIsWeb && (!kIsWeb)) {
+    if (!kIsWeb) {
       await windowManager.destroy();
     } else {
       await SystemNavigator.pop();

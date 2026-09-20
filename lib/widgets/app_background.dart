@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +10,8 @@ import '../services/image_service.dart';
 /// lisibilité. Sans image déposée : le fond sombre habituel.
 ///
 /// Le contenu est par-dessus l'image : rien n'est caché.
+/// Multiplateforme (fix web 19/09) : [ImageProvider] — fichier sur
+/// desktop, asset du bundle sur web.
 class AppBackground extends ConsumerWidget {
   /// Chemin relatif de l'image de fond (sans extension), ex.
   /// `screens/accueil` ou `screens/credits`. Par défaut : l'image de
@@ -24,19 +24,18 @@ class AppBackground extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final ImageService images = ref.watch(imageServiceProvider);
     // Image spécifique d'abord, sinon repli sur l'image de l'accueil,
     // sinon fond sombre.
-    final File? background = ref
-            .watch(imageServiceProvider)
-            .resolveImage(imageId) ??
-        ref.watch(imageServiceProvider).resolveImage('screens/accueil');
+    final ImageProvider? background = images.backgroundProvider(imageId) ??
+        images.backgroundProvider('screens/accueil');
 
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
         if (background != null) ...<Widget>[
-          Image.file(
-            background,
+          Image(
+            image: background,
             fit: BoxFit.cover,
             errorBuilder:
                 (BuildContext context, Object error, StackTrace? stackTrace) =>

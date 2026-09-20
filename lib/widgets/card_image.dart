@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -105,8 +104,8 @@ class CardImage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final File? file =
-        ref.watch(imageServiceProvider).resolveFile(category, id);
+    final ImageProvider? provider =
+        ref.watch(imageServiceProvider).providerFor(category, id);
     final double boxWidth = width ?? size;
     final double boxHeight = height ?? size;
     Widget placeholder() => Center(
@@ -115,7 +114,7 @@ class CardImage extends ConsumerWidget {
                   size: 24, color: fallbackIconColor),
         );
 
-    if (file == null) {
+    if (provider == null) {
       return SizedBox(
         width: boxWidth,
         height: boxHeight,
@@ -125,8 +124,8 @@ class CardImage extends ConsumerWidget {
     return SizedBox(
       width: boxWidth,
       height: boxHeight,
-      child: Image.file(
-        file,
+      child: Image(
+        image: provider,
         fit: fit,
         errorBuilder:
             (BuildContext context, Object error, StackTrace? stackTrace) =>

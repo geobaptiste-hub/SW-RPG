@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -559,9 +558,9 @@ class _FighterPhoto extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final File? photo = ref
+    final ImageProvider? photo = ref
         .watch(imageServiceProvider)
-        .resolveFile('characters', cardImageId(name));
+        .providerFor('characters', cardImageId(name));
     if (photo == null) {
       return CircleAvatar(
         radius: 30,
@@ -575,7 +574,7 @@ class _FighterPhoto extends ConsumerWidget {
       width: 96,
       height: 96,
       child: ClipOval(
-        child: Image.file(photo,
+        child: Image(image: photo,
             fit: BoxFit.cover,
             errorBuilder: (BuildContext context, Object error,
                     StackTrace? stackTrace) =>

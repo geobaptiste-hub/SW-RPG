@@ -29,3 +29,32 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/audio/music/accueil/
+    - assets/audio/music/combats/
+    - assets/audio/music/credits/
+    - assets/audio/music/fin_lumineuse/
+    - assets/audio/music/fin_sombre/
+    - assets/audio/music/lieux/
+    - assets/audio/music/parametres/
+    - assets/audio/music/planetes/
+    - assets/audio/music/preparation/
+    - assets/audio/sfx/
+    - assets/images/allies/
+    - assets/images/allies/healers/
+    - assets/images/allies/nukers/
+    - assets/images/allies/specials/
+    - assets/images/allies/squads/
+    - assets/images/allies/supports/
+    - assets/images/allies/tanks/
+    - assets/images/armors/
+    - assets/images/bosses/
+    - assets/images/cantina/
+    - assets/images/characters/
+    - assets/images/monsters/
+    - assets/images/planets/
+    - assets/images/screens/
+    - assets/images/screens/credits/
+    - assets/images/screens/game_over/
+    - assets/images/screens/parametres/
+    - assets/images/weapons/
