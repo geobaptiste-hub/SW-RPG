@@ -1,0 +1,13 @@
+Déposez ici les PNG — visibles dans le jeu sans recompilation.
+Format : carré ~512x512 OU carte portrait (ex. 650x1004, comme les armes) — les deux conviennent.
+Noms attendus (9 fichiers) :
+
+  coruscant.png
+  alderande.png
+  endor.png
+  hoth.png
+  tatooine.png
+  mustafar.png
+  yavin4.png
+  etoile_noire.png
+  dagobah.png

@@ -1,0 +1,6 @@
+Déposez ici les FONDS de l'écran de fin de partie (1920x1080, cover) :
+
+  fin_lumineuse.png  — gagnant Rebel/Jedi (côté lumineux)
+  fin_sombre.png     — gagnant Empire/Sith (côté sombre)
+
+JPG accepté aussi. Sans ces fichiers : le fond accueil est utilisé.

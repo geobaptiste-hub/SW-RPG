@@ -1,0 +1,8 @@
+Déposez ici l'image de FOND de l'écran d'accueil :
+
+  accueil.png (ou accueil.jpg)
+
+Taille conseillée : 1920x1080 (16:9, plein écran). L'image est étirée en « cover » :
+elle remplit tout l'écran, les bords peuvent être légèrement recadrés sur un
+autre ratio. Gardez les éléments importants sur les côtés (le menu central
+s'affiche par-dessus).

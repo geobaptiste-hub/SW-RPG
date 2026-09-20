@@ -1,0 +1,8 @@
+Déposez ici les MUSIQUES DE LIEU — jouées EN BOUCLE sans recompilation.
+mp3 conseillé (wav/ogg acceptés). Noms attendus :
+
+  cantina.mp3   — musique de la CANTINA (mini-zone 3x3) : démarre quand
+                  un joueur entre par la case-portail, s'arrête en
+                  ressortant (l'ambiance de la planète reprend).
+
+Si le fichier manque : silence (aucune erreur).

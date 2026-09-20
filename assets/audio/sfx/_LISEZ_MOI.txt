@@ -1,0 +1,19 @@
+Déposez ici les EFFETS sonores — joués une fois, sans recompilation.
+mp3 conseillé (wav/ogg acceptés). Noms attendus :
+
+Combat :
+  niveau.mp3              — montée de niveau
+  victoire_monstre.mp3    — victoire contre un monstre
+  victoire_boss.mp3       — victoire contre un boss
+  elimination.mp3         — élimination d'un joueur
+  attaque.mp3             — lancer de dé d'attaque en combat
+
+Plateau :
+  de.mp3                  — lancer du dé de déplacement
+  pas.mp3                 — avance d'une case
+  monstre.mp3             — rencontre d'un monstre
+  portail.mp3             — voyage par portail
+  carte_positive.mp3      — trouvaille : allié, équipement ou soin
+  carte_negative.mp3      — carte Spéciale ennemie (elle attaque)
+
+Si un fichier manque : pas de son (aucune erreur).

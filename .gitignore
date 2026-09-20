@@ -1,0 +1,23 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Plateformes
+ios/Pods/
+windows/flutter/ephemeral/
+**/GeneratedPluginRegistrant.*
+
+# Divers
+*.log
+.DS_Store

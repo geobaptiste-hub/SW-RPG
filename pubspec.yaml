@@ -1,0 +1,31 @@
+name: star_wars_rpg
+description: "Star Wars RPG — jeu de plateau RPG numérique au tour par tour (Sprint 1)."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+
+dependencies:
+  audioplayers: ^5.2.1
+  flutter:
+    sdk: flutter
+
+  # Gestion d'état (Architecture v1.0)
+  flutter_riverpod: ^2.6.1
+
+  # Navigation (Architecture v1.0)
+  go_router: ^14.8.1
+
+  # Sauvegarde locale (Architecture v1.0)
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  window_manager: ^0.5.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

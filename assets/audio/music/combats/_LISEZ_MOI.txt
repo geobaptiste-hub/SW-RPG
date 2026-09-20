@@ -1,0 +1,11 @@
+Déposez ici les MUSIQUES DE COMBAT — jouées EN BOUCLE pendant le combat,
+sans recompilation. mp3 conseillé (wav/ogg acceptés). Noms attendus :
+
+  monstre.mp3   — combat contre un monstre
+  joueurs.mp3   — combat entre joueurs (duel JvJ)
+
+La musique démarre à l'entrée en combat et s'arrête au retour au plateau
+(l'ambiance sonore de la planète reprend automatiquement).
+Les combats de BOSS gardent l'ambiance de la planète (pas de piste dédiée).
+
+Si un fichier manque : silence (aucune erreur).

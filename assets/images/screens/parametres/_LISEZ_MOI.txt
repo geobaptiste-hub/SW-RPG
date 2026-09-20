@@ -1,0 +1,5 @@
+Déposez ici le FOND de l'écran Paramètres — joué sans recompilation.
+Fichier attendu : parametres.png (ou parametres.jpg)
+Taille conseillée : 1920x1080 (16:9). Affiché en « cover » plein écran,
+derrière le contenu (voile sombre léger pour la lisibilité).
+Sans ce fichier : le fond accueil.png est utilisé à la place.

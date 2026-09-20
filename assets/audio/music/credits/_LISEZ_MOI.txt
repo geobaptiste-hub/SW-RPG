@@ -1,0 +1,2 @@
+Déposez ici la MUSIQUE de cet écran — jouée en boucle, sans recompilation.
+Fichier attendu : credits.mp3 (mp3 conseillé ; wav/ogg acceptés).

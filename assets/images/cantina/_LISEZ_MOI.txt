@@ -1,0 +1,14 @@
+Déposez ici les images de la CANTINA (mini-zone 3x3) — visibles dans le
+jeu sans recompilation. PNG ou JPG/JPEG acceptés.
+
+  cantina.png  — médaillon rond affiché sur la CASE-PORTAIL de la
+                 planète principale À LA PLACE du logo jaune, une fois
+                 la cantina entrée au moins une fois. Format carré
+                 conseillé (~256x256 ou plus).
+  bar.png      — affiché en GRAND sur les 3 cases du haut de la cantina
+                 (le bar en bois, cases bloquées). Format paysage large
+                 (~3:1, ex. 720x240).
+
+Rappel : la case-portail sur la planète principale montre le logo jaune
+(icône portail) tant que personne n'est entré dans la cantina.
+Tant que les fichiers manquent : logo/icônes de repli, sans erreur.

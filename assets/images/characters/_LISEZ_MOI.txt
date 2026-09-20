@@ -1,0 +1,12 @@
+Déposez ici les PNG — visibles dans le jeu sans recompilation.
+Format : carré ~512x512 OU carte portrait (ex. 650x1004, comme les armes) — les deux conviennent.
+Noms attendus (8 fichiers) :
+
+  luke_skywalker.png
+  princesse_leia.png
+  yoda.png
+  padme_amidala.png
+  l_empereur.png
+  dark_nihilus.png
+  dark_vador.png
+  grand_moff_tarkin.png

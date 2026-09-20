@@ -1,0 +1,20 @@
+Déposez ici l'AMBIANCE SONORE de chaque planète — jouée EN BOUCLE tant que
+le joueur reste dessus, sans recompilation. mp3 conseillé (wav/ogg acceptés).
+Une piste DIFFÉRENTE par planète, mêmes noms de fichiers que les images
+(assets/images/planets/) :
+
+PLANÈTES PRINCIPALES (départ) :
+  coruscant.mp3     — Coruscant
+  alderande.mp3     — Aldérande
+  endor.mp3         — Endor
+  hoth.mp3          — Hoth
+  tatooine.mp3      — Tatooine
+
+PLANÈTES SECONDAIRES (via les portails) :
+  mustafar.mp3      — Mustafar
+  yavin4.mp3        — Yavin IV
+  etoile_noire.mp3  — Étoile Noire
+  dagobah.mp3       — Dagobah
+
+Traverser un portail bascule automatiquement sur la boucle de la planète
+d'arrivée. Si un fichier manque : silence pour cette planète (aucune erreur).

@@ -1,0 +1,27 @@
+Déposez ici les PNG — visibles dans le jeu sans recompilation.
+Format : carré ~512x512 OU carte portrait (ex. 650x1004, comme les armes) — les deux conviennent.
+Noms attendus (23 fichiers) :
+
+  sabre_laser_dark_maul.png
+  sabre_kylo_ren.png
+  sabre_vador.png
+  sabre_luke.png
+  sabre_windu.png
+  sabre_laser.png
+  pistolet_blaster_s5.png
+  sabre_laser_noir.png
+  canon_blaster_z6.png
+  pistolet_westar34.png
+  electro_baton.png
+  lance_lim.png
+  bowcaster.png
+  fusil_disruptor_t7.png
+  fusil_amban.png
+  arc_blaster.png
+  fusil_blaster_a280.png
+  blaster_dl44.png
+  blaster_dh17.png
+  blaster_e11.png
+  carabine_dc15.png
+  baton_electro_stun.png
+  pist_blaster_se14c.png

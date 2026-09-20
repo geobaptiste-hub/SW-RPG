@@ -1,0 +1,27 @@
+Déposez ici les PNG — visibles dans le jeu sans recompilation.
+Format : carré ~512x512 OU carte portrait (ex. 650x1004, comme les armes) — les deux conviennent.
+Noms attendus (23 fichiers) :
+
+  armure_dark_vador.png
+  tenue_luke.png
+  tenue_palpatine.png
+  armure_jango_fett.png
+  armure_boba_fett.png
+  tenue_officier_imperial.png
+  tenue_jedi.png
+  armure_magnagardes.png
+  tenue_princesse_leia.png
+  scout_trooper.png
+  snowtrooper.png
+  death_trooper.png
+  shoretrooper.png
+  garde_reine_amidala.png
+  armure_mandalorienne.png
+  garde_imperial.png
+  tenue_stormtrooper.png
+  uniforme_officier_imperial.png
+  armure_clone_phase1.png
+  armure_clone_phase2.png
+  tenue_rebelle_endor.png
+  tenue_pilote_xwing.png
+  tenue_jawa.png

@@ -1,0 +1,36 @@
+Déposez ici les PNG — visibles dans le jeu sans recompilation.
+Format : carré ~512x512 OU carte portrait (ex. 650x1004, comme les armes) — les deux conviennent.
+Noms attendus (32 fichiers) :
+
+  snowtrooper.png
+  bossk.png
+  cad_bane.png
+  scout_trooper.png
+  greedo.png
+  ig_88.png
+  jango_fett.png
+  boba_fett.png
+  general_grievous.png
+  dark_maul.png
+  grand_inquisiteur.png
+  dark_talon.png
+  comte_dooku.png
+  dark_revan.png
+  asajj_ventress.png
+  kylo_ren.png
+  cassian_andor.png
+  jyn_erso.png
+  finn.png
+  poe_dameron.png
+  biggs_darklighter.png
+  wedge_antilles.png
+  lando_calrissian.png
+  han_solo.png
+  galen_marek.png
+  yarael_poof.png
+  aayla_secura.png
+  shaak_ti.png
+  qui_gon_jinn.png
+  rey.png
+  obi_wan_kenobi.png
+  anakin_skywalker.png
