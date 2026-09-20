@@ -29,6 +29,10 @@ class SoundController {
   String? _currentTrack;
   Source? _currentSource;
 
+  /// Dernière piste pour laquelle la relecture web a été forcée
+  /// ([resumeWebAudio] — une fois par piste suffit).
+  String? _webAudioResumedForTrack;
+
   SoundController(this.ref);
 
   bool get _hiveReady => Hive.isBoxOpen('settings');
@@ -102,16 +106,24 @@ class SoundController {
   }
 
   /// WEB / Safari uniquement : l'autoplay est bloqué avant la première
-  /// interaction — la musique lancée au chargement reste muette. À appeler
-  /// au premier toucher de l'utilisateur : relance la piste courante.
+  /// interaction — la musique lancée au chargement reste muette (et
+  /// l'état du player peut rester optimistiquement « playing »). Au
+  /// premier toucher : on FORCE la relecture de la piste courante.
   Future<void> resumeWebAudio() async {
     if (!kIsWeb) return;
     final AudioPlayer? player = _musicPlayer;
     final Source? source = _currentSource;
     if (player == null || source == null) return;
+    // Une seule relecture forcée par piste : ensuite, l'état du player
+    // est fiable (le premier play est passé par un geste utilisateur).
+    if (_webAudioResumedForTrack == _currentTrack &&
+        player.state == PlayerState.playing) {
+      return;
+    }
+    _webAudioResumedForTrack = _currentTrack;
     try {
-      if (player.state == PlayerState.playing) return;
-      await player.resume();
+      await player.stop();
+      await player.play(source);
     } catch (_) {
       // Silencieux.
     }

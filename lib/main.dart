@@ -17,6 +17,16 @@ Future<void> main() async {
   // aux boxes (SaveService, SettingsService).
   await Hive.initFlutter();
 
+  // Box des réglages ouverte DÈS LE DÉMARRAGE : le contrôleur audio
+  // l'exige (_hiveReady). Sur desktop, le bloc plein écran ci-dessous
+  // l'ouvrait incidemment — sur web elle ne l'était jamais → AUCUN son
+  // (musique comme effets — fix 20/09).
+  try {
+    await Hive.openBox('settings');
+  } catch (_) {
+    // Sans réglages, l'app tourne quand même (valeurs par défaut).
+  }
+
   // Web (iPad) : charger la liste des images du bundle pour choisir la
   // bonne extension (.png/.jpg/.jpeg) — fix web 19/09.
   final ImageService imageService = ImageService();
