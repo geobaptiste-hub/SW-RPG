@@ -115,6 +115,8 @@ void main() {
       (WidgetTester tester) async {
     _StubCombatController.fixedSession = _session();
     await tester.pumpWidget(_app());
+    // Splash 1 s : on fait écoulé son Timer avant les assertions.
+    await tester.pump(const Duration(seconds: 2));
     appRouter.go('/combat');
     await tester.pump();
     await tester.pump();
@@ -132,6 +134,8 @@ void main() {
       (WidgetTester tester) async {
     _StubCombatController.fixedSession = _session();
     await tester.pumpWidget(_app());
+    // Splash 1 s : on fait écoulé son Timer avant les assertions.
+    await tester.pump(const Duration(seconds: 2));
     appRouter.go('/combat');
     await tester.pump();
     await tester.pump();
@@ -151,6 +155,8 @@ void main() {
     // (le monstre 500 PV tombe en 2 à 4 coups à 125/250 dégâts).
     _StubCombatController.fixedSession = _session();
     await tester.pumpWidget(_app());
+    // Splash 1 s : on fait écoulé son Timer avant les assertions.
+    await tester.pump(const Duration(seconds: 2));
     appRouter.go('/combat');
     await tester.pump();
     await tester.pump();

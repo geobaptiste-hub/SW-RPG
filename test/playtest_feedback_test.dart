@@ -289,10 +289,12 @@ void main() {
       combat.attack();
       final CombatSession session = container.read(combatControllerProvider)!;
       if (!session.finished) {
+        // Fix 20/09 : riposte ALÉATOIRE (±10 % autour de 50 ATK, puis
+        // x 0,5 au N1) → entre 22 et 27 PV.
         expect(
           hpBefore - session.playerHp,
-          GameConstants.scaleIncomingDamage(50, level: 1, maxHp: 200),
-          reason: 'riposte 50 ATK x 0,5 = 25 au niveau 1',
+          inInclusiveRange(22, 27),
+          reason: 'riposte 50 ATK x 0,5 = 25 au niveau 1 (±10 %)',
         );
       }
     });

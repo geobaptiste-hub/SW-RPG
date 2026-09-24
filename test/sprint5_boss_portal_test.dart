@@ -132,6 +132,23 @@ void main() {
         expect((roll - 250) % 10, 0, reason: 'pas de 10 requis');
       }
     });
+
+    test('FIX 20/09 : riposte de monstre aléatoire ±10 % (10 → 9, 10 ou 11)',
+        () {
+      final CombatService combat = CombatService(random: Random(7));
+      final Set<int> seen = <int>{};
+      for (int i = 0; i < 300; i++) {
+        final int roll = combat.rollMonsterAttack(10);
+        expect(roll, inInclusiveRange(9, 11),
+            reason: 'attaque 10 ±10 % → 9 à 11 (plus de montant fixe)');
+        seen.add(roll);
+      }
+      expect(seen.length, 3, reason: 'les trois valeurs sortent (9, 10, 11)');
+      // Autre palier : 50 ATK → 45 à 55.
+      for (int i = 0; i < 200; i++) {
+        expect(combat.rollMonsterAttack(50), inInclusiveRange(45, 55));
+      }
+    });
   });
 
   group('Combat de boss (GDD §12)', () {
@@ -279,6 +296,82 @@ void main() {
       expect(session.xpGained, 0);
       expect(container.read(gameControllerProvider)!.activePlayer.hp,
           hpBefore, reason: 'fuir conserve les PV');
+    });
+
+    test('FIX 20/09 : un boss blessé GARDE ses PV après la fuite du joueur',
+        () {
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final GameState state = _state(
+        planet: _secondary(PlanetType.mustafar),
+        planetType: PlanetType.mustafar,
+        players: <Player>[
+          _player(planet: PlanetType.mustafar, level: 6),
+        ],
+        bosses: <Boss>[
+          _boss(BossType.exogorth, PlanetType.mustafar, const Position(3, 4)),
+        ],
+      );
+      container.read(gameControllerProvider.notifier).state = state;
+
+      final CombatController combat =
+          container.read(combatControllerProvider.notifier);
+      combat.startBossCombat(state.bosses.first);
+      // Un seul coup au niveau 6 : bien en dessous des 10000 PV du boss.
+      combat.attack();
+      final CombatSession session = container.read(combatControllerProvider)!;
+      expect(session.finished, isFalse,
+          reason: 'le boss survit au premier coup (ATK N6 < 10000)');
+      expect(session.monsterHpRemaining, lessThan(GameConstants.bossHp),
+          reason: 'le coup a blessé le boss');
+      combat.flee();
+
+      final GameState after = container.read(gameControllerProvider)!;
+      expect(after.bosses.single.hp, session.monsterHpRemaining,
+          reason: 'le boss garde les dégâts infligés : il ne se remet pas '
+              'à 10000 PV');
+
+      // Le prochain combat contre LUI repart des PV restants.
+      container
+          .read(combatControllerProvider.notifier)
+          .startBossCombat(after.bosses.single);
+      expect(container.read(combatControllerProvider)!.monsterHpRemaining,
+          session.monsterHpRemaining,
+          reason: 'le joueur suivant affronte le boss blessé');
+    });
+
+    test('FIX 20/09 : le boss vaincu réapparaît à pleine vie (10000 PV)',
+        () {
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      // Boss déjà blessé lors d\'un combat précédent (fuite d\'un joueur).
+      final Boss damaged = _boss(
+              BossType.exogorth, PlanetType.mustafar, const Position(3, 4))
+          .copyWith(hp: 5600);
+      final Player player = _player(
+        planet: PlanetType.mustafar,
+        level: 6,
+      );
+      final Player other = _player(
+        planet: PlanetType.coruscant,
+        index: 1,
+      );
+      container.read(gameControllerProvider.notifier).state = _state(
+        planet: _secondary(PlanetType.mustafar),
+        planetType: PlanetType.mustafar,
+        players: <Player>[player, other],
+        bosses: <Boss>[damaged],
+      );
+
+      container
+          .read(gameControllerProvider.notifier)
+          .applyBossVictory(type: BossType.exogorth, playerHp: player.hp);
+
+      final GameState after = container.read(gameControllerProvider)!;
+      expect(after.bosses.single.hp, GameConstants.bossHp,
+          reason: 'une fois vaincu, le boss réapparaît à 10000 PV');
+      expect(after.bosses.single.isGone, isTrue,
+          reason: 'deux joueurs actifs : il reprend la fuite');
     });
 
     test('un tank « dégâts divisés » réduit la riposte du boss de moitié',

@@ -1862,6 +1862,9 @@ class GameController extends Notifier<GameState?> {
         defeatedByPlayerIds: defeated,
         // Victoire sans mort définitive : le boss prend la fuite.
         isGone: !definitivelyDead,
+        // Il réapparaîtra À PLEINE VIE (retours playtest 20/09) : les dégâts
+        // ne persistent que pour les fuites en cours de combat.
+        hp: GameConstants.bossHp,
       );
     }).toList();
 
@@ -1876,6 +1879,21 @@ class GameController extends Notifier<GameState?> {
       playerEliminated: updated.eliminated,
       xpGained: xp + bossBonusXp,
     );
+  }
+
+  /// Persiste les PV restants d'un boss après la FUITE du joueur (retours
+  /// playtest 20/09 : un boss blessé garde ses dégâts — le prochain
+  /// combat contre LUI repart de ces PV ; il ne récupère ses 10000 PV
+  /// qu'une fois vaincu, à sa réapparition — voir applyBossVictory).
+  void applyBossDamage({required BossType type, required int remainingHp}) {
+    final GameState? current = state;
+    if (current == null || remainingHp <= 0) return;
+    final List<Boss> bosses = List<Boss>.of(current.bosses);
+    final int index =
+        bosses.indexWhere((Boss b) => b.type == type && !b.isGone);
+    if (index < 0) return;
+    bosses[index] = bosses[index].copyWith(hp: remainingHp);
+    state = current.copyWith(bosses: bosses);
   }
 
   // ---------------------------------------------------------------------------

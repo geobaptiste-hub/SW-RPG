@@ -38,6 +38,16 @@ class CombatService {
     return min + _random.nextInt(steps) * step;
   }
 
+  /// Attaque de monstre : dégâts ALÉATOIRES autour de l'attaque de base
+  /// de ±10 % (retours playtest 20/09 — même mécanique d'aléatoire que
+  /// les boss, au lieu d'un montant fixe). Ex. attaque 10 → 9, 10 ou 11.
+  int rollMonsterAttack(int baseAttack) {
+    final int min = (baseAttack * 0.9).floor();
+    final int max = (baseAttack * 1.1).floor();
+    if (max <= min) return min;
+    return min + _random.nextInt(max - min + 1);
+  }
+
   /// Un 6 au dé est un coup critique ; avec le soutien « critOn5 », le 5
   /// aussi (retours playtest 10/09/2026).
   static bool isCritical(int roll, {bool critOn5 = false}) =>
@@ -301,10 +311,11 @@ class CombatController extends Notifier<CombatSession?> {
       int counter = 0;
       if (hp > 0) {
         // Sprint 4.1 : le monstre riposte après chaque attaque. Retours
-        // playtest : dégâts selon le niveau puis ÷ 2 si un tank « dégâts
+        // playtest 20/09 : dégâts ALÉATOIRES autour de l'attaque de base
+        // (±10 % — ex. 10 → 9-11), puis ÷ 2 si un tank « dégâts
         // divisés » est dans l'équipe.
         counter = GameConstants.scaleIncomingDamage(
-          session.monster!.attack,
+          _combat.rollMonsterAttack(session.monster!.attack),
           level: game.activePlayer.level,
           maxHp: game.activePlayer.totalMaxHp,
         );
@@ -565,6 +576,15 @@ class CombatController extends Notifier<CombatSession?> {
       return;
     }
     _game.applyPlayerCombatHp(session.playerHp);
+    // Retours playtest 20/09 : le boss GARDE les dégâts infligés — au
+    // prochain combat contre LUI, il repart de ses PV restants (il ne
+    // récupère ses 10000 PV qu'une fois vaincu, à sa réapparition).
+    if (session.kind == CombatKind.boss) {
+      _game.applyBossDamage(
+        type: session.bossType!,
+        remainingHp: session.monsterHpRemaining,
+      );
+    }
     state = session.copyWith(finished: true, victory: false, fled: true);
   }
 

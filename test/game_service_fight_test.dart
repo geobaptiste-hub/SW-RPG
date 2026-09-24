@@ -160,14 +160,25 @@ void main() {
     expect(after.currentPlanet.tileAt(target.x, target.y).monster, isNull,
         reason: 'la carte du monstre est retirée');
     expect(after.activePlayer.xp, 50);
-    // Sprint 4.1 : riposte du monstre après CHAQUE attaque non létale
-    // (20 PV par round, sans tank dans l'équipe).
-    final int ripostePerAttack = GameConstants.scaleIncomingDamage(
-      wampa.attack,
+    // Sprint 4.1 : riposte du monstre après CHAQUE attaque non létale.
+    // Fix 20/09 : dégâts ALÉATOIRES (±10 % autour de l'attaque de base,
+    // puis x 0,5 au niveau 1) — Wampa 20 ATK → 9 à 11 par riposte.
+    final int riposteMin = GameConstants.scaleIncomingDamage(
+      (wampa.attack * 0.9).floor(),
       level: 1,
       maxHp: 200,
-    ); // x 0,5 au niveau 1 (retours playtest).
-    expect(session.damageTaken, ripostePerAttack * (session.attacksUsed - 1));
+    );
+    final int riposteMax = GameConstants.scaleIncomingDamage(
+      (wampa.attack * 1.1).floor(),
+      level: 1,
+      maxHp: 200,
+    );
+    final int ripostes = session.attacksUsed - 1;
+    expect(session.damageTaken,
+        greaterThanOrEqualTo(riposteMin * ripostes),
+        reason: 'chaque riposte inflige au moins 90 % de l\'attaque');
+    expect(session.damageTaken, lessThanOrEqualTo(riposteMax * ripostes),
+        reason: 'chaque riposte inflige au plus 110 % de l\'attaque');
     expect(
       after.activePlayer.hp,
       200 - session.damageTaken,

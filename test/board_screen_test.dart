@@ -111,6 +111,8 @@ void main() {
 
   Future<void> openBoard(WidgetTester tester) async {
     await tester.pumpWidget(_app());
+    // Splash 1 s : on fait écoulé son Timer avant les assertions.
+    await tester.pump(const Duration(seconds: 2));
     appRouter.go('/board');
     // Deux frames : la navigation GoRouter se concrétise à la frame suivante.
     await tester.pump();

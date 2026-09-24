@@ -9,21 +9,27 @@ import '../../screens/home/credits_screen.dart';
 import '../../screens/journal/journal_screen.dart';
 import '../../screens/home/home_screen.dart';
 import '../../screens/home/settings_screen.dart';
+import '../../screens/home/splash_screen.dart';
 import '../../screens/inventory/inventory_screen.dart';
 import '../../screens/new_game/new_game_screen.dart';
 import '../../screens/players/players_screen.dart';
 import '../../screens/team/team_screen.dart';
 
 /// Configuration GoRouter (Architecture v1.0 — Navigation) :
-/// Accueil → Nouvelle Partie → Plateau → (Combat — Sprint 3) →
+/// Splash (1 s) → Accueil → Nouvelle Partie → Plateau → (Combat — Sprint 3) →
 /// Fin de partie (Sprint 5).
 ///
 /// Les écrans Personnage / Équipe / Inventaire / Joueurs sont des routes de
 /// premier niveau : ils sont ouverts depuis la barre bas du plateau (CDC §10)
 /// et reviennent au plateau via /board.
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/',
+  initialLocation: '/splash',
   routes: <RouteBase>[
+    GoRoute(
+      path: '/splash',
+      builder: (BuildContext context, GoRouterState state) =>
+          const SplashScreen(),
+    ),
     GoRoute(
       path: '/',
       builder: (BuildContext context, GoRouterState state) =>

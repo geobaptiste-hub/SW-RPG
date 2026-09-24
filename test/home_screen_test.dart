@@ -30,6 +30,8 @@ void main() {
       ],
       child: const StarWarsRpgApp(),
     ));
+    // Splash 1 s : on fait écoulé son Timer avant les assertions.
+    await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
 
     expect(find.text('STAR WARS'), findsOneWidget);

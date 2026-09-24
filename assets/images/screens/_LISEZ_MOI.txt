@@ -6,3 +6,8 @@ Taille conseillée : 1920x1080 (16:9, plein écran). L'image est étirée en « 
 elle remplit tout l'écran, les bords peuvent être légèrement recadrés sur un
 autre ratio. Gardez les éléments importants sur les côtés (le menu central
 s'affiche par-dessus).
+
+NOUVEAU (20/09/2026) :
+  splash.jpg (ou .png)  — image du SPLASH de démarrage (affichée 1 seconde
+                        au lancement du jeu). Format paysage 16:9 conseillé
+                        (ex. 1920x1080). Sans image : fond sombre + logo texte.
