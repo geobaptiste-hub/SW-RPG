@@ -1,0 +1,5 @@
+Déposez ici les images de DÉCOR du plateau — sans recompilation.
+PNG ou JPG acceptés.
+
+  arbre.jpg / arbre.png — image d'ARBRE affichée sur les cases bloquées
+                          (à la place de la case sombre), tous plateaux.

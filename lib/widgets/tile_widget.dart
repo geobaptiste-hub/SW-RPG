@@ -40,6 +40,11 @@ class TileWidget extends StatelessWidget {
     final Color surfaceColor =
         tile.walkable ? Color(visual.primaryColor) : Color(visual.blockedColor);
 
+    // Cases bloquées : image d'arbre déposée dans
+    // `assets/images/decor/arbre.jpg|png` (retours playtest 20/09 — à la
+    // place de la case sombre). Sans image : la case sombre habituelle.
+    final bool showTree = !tile.walkable;
+
     Widget content = FogWidget(
       tile: tile,
       child: Container(
@@ -57,7 +62,17 @@ class TileWidget extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            if (!tile.discovered)
+            if (showTree)
+              const Center(
+                child: CardImage(
+                  category: 'decor',
+                  id: 'arbre',
+                  size: 52,
+                  fit: BoxFit.cover,
+                  fallback: SizedBox.shrink(),
+                ),
+              )
+            else if (!tile.discovered)
               const UndiscoveredTileDeco()
             else if (tile.monster != null)
               // Contenu de case : visible uniquement une fois la case

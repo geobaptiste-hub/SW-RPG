@@ -202,6 +202,10 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
     } else if (result == MoveResult.portalTravel) {
       ref.read(soundControllerProvider).playSfx('portail');
       _showPortalTravelDialog();
+    } else if (result == MoveResult.teleport) {
+      // Case de téléportation utilisée (retours playtest 20/09).
+      ref.read(soundControllerProvider).playSfx('portail');
+      _showTeleportDialog();
     } else if (result == MoveResult.cantinaTravel) {
       // Entrée dans la cantina par la case-portail (retours playtest
       // 19/09 v2) : la musique bascule via _updateAmbience (listen).
@@ -269,6 +273,27 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
             'Marchez sur le comptoir (ligne du milieu) pour vous '
             'désaltérer et regagner tous vos PV. Repassez par la case '
             'd\'entrée pour ressortir.'),
+        actions: <Widget>[
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Téléportation (retours playtest 20/09) : la case nous projette à
+  /// l'autre bout de la planète, sur un point libre au hasard.
+  void _showTeleportDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('🌀 Téléportation !'),
+        content: const Text(
+            'Un portail ancien vous projette à l’autre bout de la '
+            'planète…\n\n'
+            'La case reste désormais ouverte : vous saurez la retrouver.'),
         actions: <Widget>[
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -626,6 +651,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
                         bosses: state.bosses,
                         portals: state.portals,
                         cantina: state.cantina,
+                        teleport: state.teleport,
                         controller: _boardController,
                         moveTargets: targets,
                         onMoveTargetTap: (Position target) =>

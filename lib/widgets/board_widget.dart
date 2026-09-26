@@ -1,4 +1,6 @@
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +10,7 @@ import '../core/theme/app_theme.dart';
 import '../models/boss.dart';
 import '../models/cantina_zone.dart';
 import '../models/planet.dart';
+import '../models/teleport_portal.dart';
 import '../models/player.dart';
 import '../models/portal.dart';
 import '../models/tile.dart';
@@ -68,6 +71,10 @@ class BoardWidget extends StatefulWidget {
   /// ensuite — masqués par le brouillard comme le reste.
   final CantinaZone? cantina;
 
+  /// La CASE DE TÉLÉPORTATION (retours playtest 20/09) : invisible avant
+  /// la première utilisation, puis image du portail sur la case.
+  final TeleportPortal? teleport;
+
   /// Cibles de déplacement surlignées (vide si aucune phase de déplacement).
   final Set<Position> moveTargets;
   final void Function(Position target)? onMoveTargetTap;
@@ -85,6 +92,7 @@ class BoardWidget extends StatefulWidget {
     this.bosses = const [],
     this.portals = const [],
     this.cantina,
+    this.teleport,
     this.moveTargets = const {},
     this.onMoveTargetTap,
     this.galaxyView = false,
@@ -488,6 +496,53 @@ class _BoardWidgetState extends State<BoardWidget>
                         }),
                       ),
                     ),
+              // TÉLÉPORTATION (retours playtest 20/09) : une fois utilisée,
+              // l'image du portail déposée (`assets/images/teleport/
+              // portail.jpg|png`) s'affiche sur la case quand elle est
+              // visible. Invisible avant la première utilisation.
+              if (widget.teleport != null &&
+                  widget.teleport!.planet == widget.planet.type &&
+                  widget.teleport!.visited &&
+                  (widget.planet
+                          .tileAtOrNull(widget.teleport!.position.x,
+                              widget.teleport!.position.y)
+                          ?.visible ??
+                      false))
+                _marker(
+                  widget.teleport!.position,
+                  Consumer(builder:
+                      (BuildContext context, WidgetRef ref, Widget? _) {
+                    final File? portalImage = ref
+                        .watch(imageServiceProvider)
+                        .resolveFile('teleport', 'portail');
+                    return Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.background,
+                        border: Border.all(
+                            color: AppColors.gold, width: 1.5),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black45, blurRadius: 4),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: portalImage == null
+                            ? const Icon(Icons.flash_on,
+                                size: 20, color: AppColors.gold)
+                            : Image.file(portalImage,
+                                fit: BoxFit.cover,
+                                errorBuilder: (BuildContext context,
+                                        Object error,
+                                        StackTrace? stackTrace) =>
+                                    const Icon(Icons.flash_on,
+                                        size: 20,
+                                        color: AppColors.gold)),
+                      ),
+                    );
+                  }),
+                ),
               // Boss (Sprint 5) : médaillon rond avec l'image du boss
               // si déposée (`assets/images/bosses/` — Sprint 6), sinon
               // icône par type. Caché hors du rayon de vue.

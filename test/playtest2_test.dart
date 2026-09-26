@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:star_wars_rpg/core/constants/board_constants.dart';
 import 'package:star_wars_rpg/core/constants/card_constants.dart';
 import 'package:star_wars_rpg/core/constants/character_constants.dart';
 import 'package:star_wars_rpg/core/constants/enums.dart';
@@ -18,6 +19,7 @@ import 'package:star_wars_rpg/models/planet.dart';
 import 'package:star_wars_rpg/models/portal.dart';
 import 'package:star_wars_rpg/models/player.dart';
 import 'package:star_wars_rpg/models/tile.dart';
+import 'package:star_wars_rpg/models/teleport_portal.dart';
 import 'package:star_wars_rpg/models/weapon.dart';
 import 'package:star_wars_rpg/screens/game_over/game_over_screen.dart'
     show GameOverScreen, WinnerResolution;
@@ -141,6 +143,34 @@ GameState _duelState(Planet planet, List<Player> players,
   );
 }
 
+GameState _stateOptions({
+  required Planet planet,
+  required List<Player> players,
+  required bool doubleMonstersUnlocked,
+  TeleportPortal? teleport,
+  int movement = 0,
+}) {
+  return GameState(
+    schemaVersion: GameState.currentSchemaVersion,
+    gameId: 'options_test',
+    seed: 42,
+    mode: GameMode.chacunPourSoi,
+    teamSize: 0,
+    planetType: PlanetType.hoth,
+    currentPlanet: planet,
+    players: players,
+    turn: 1,
+    currentPlayerIndex: 0,
+    gameTimeSeconds: 0,
+    movementPointsRemaining: movement,
+    lastDiceRoll: movement == 0 ? null : movement,
+    bosses: const [],
+    portals: const [],
+    teleport: teleport,
+    status: GameStatus.inProgress,
+  );
+}
+
 void main() {
   group('Soutien critOn5 (Ki-Adi-Mundi, C-3PO…)', () {
     test('le 5 devient un critique', () {
@@ -198,7 +228,11 @@ void main() {
           container.read(gameControllerProvider.notifier);
       controller.state = _duelState(planet.withTiles(tiles), <Player>[player]);
 
-      controller.moveActivePlayerTo(target.x, target.y);
+      final MoveResult moveResult =
+          controller.moveActivePlayerTo(target.x, target.y);
+      // ignore: avoid_print
+      print('MOVE: $moveResult · tuile monstre='
+          '${container.read(gameControllerProvider)!.currentPlanet.tileAt(target.x, target.y).monster}');
       final CombatController combat =
           container.read(combatControllerProvider.notifier);
       combat.startMonsterCombat(target);
@@ -1202,6 +1236,136 @@ void main() {
       expect(m1.attack + m2.attack, 15, reason: '5 + 10 ATK');
       expect(m1.hp + m2.hp, 500, reason: '200 + 300 PV');
       expect(xp, 75, reason: '(10 + 20) x 2,5 = 75 (et non 30)');
+    });
+
+  group('Case de téléportation (retours playtest 20/09)', () {
+    test('marcher dessus téléporte LOIN et marque le portail visité', () {
+      final Planet planet =
+          mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
+      final Position door = mapService.teleportAnchorFor(42)!;
+      final Position from = mapService
+          .neighborPositions(door, planet)
+          .firstWhere((Position p) => planet.isWalkableAt(p.x, p.y));
+      final TeleportPortal portal = TeleportPortal(
+        planet: PlanetType.hoth,
+        position: door,
+      );
+      final Player player = _player(position: from)
+          .copyWith(planet: PlanetType.hoth);
+
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final GameController controller =
+          container.read(gameControllerProvider.notifier);
+      controller.state = _stateOptions(
+        planet: planet,
+        players: <Player>[player],
+        doubleMonstersUnlocked: false,
+        teleport: portal,
+        movement: 2,
+      );
+
+      final MoveResult result =
+          controller.moveActivePlayerTo(door.x, door.y);
+
+      expect(result, MoveResult.teleport);
+      final GameState after = container.read(gameControllerProvider)!;
+      expect(after.teleport!.visited, isTrue,
+          reason: 'le portail reste ouvert après la première utilisation');
+      expect(after.activePlayer.position, isNot(door),
+          reason: 'le joueur est projeté ailleurs');
+      expect(
+        after.activePlayer.position.chebyshevDistanceTo(door),
+        greaterThanOrEqualTo(12),
+        reason: 'la destination est ÉLOIGNÉE (autre côté de la carte)',
+      );
+      expect(after.activePlayer.position,
+          isNot(const Position(0, 0)),
+          reason: 'jamais sur un départ');
+      expect(controller.doubleMonstersPending, isFalse);
+    });
+
+    test('avant la première utilisation, le portail reste invisible '
+        '(visited = false)', () {
+      final Planet planet =
+          mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
+      final Position door = mapService.teleportAnchorFor(42)!;
+      expect(planet.tileAt(door.x, door.y).walkable, isTrue,
+          reason: 'la porte est protégée du blocage');
+      final GameState state = _stateOptions(
+        planet: planet,
+        players: <Player>[_player(position: const Position(5, 5))],
+        doubleMonstersUnlocked: false,
+        teleport: TeleportPortal(
+            planet: PlanetType.hoth, position: door),
+      );
+      expect(state.teleport!.visited, isFalse,
+          reason: 'pas de logo avant la première utilisation');
+    });
+  });
+
+    test('FIX 20/09 : le premier N4 ajoute des cases doubles monstres',
+        () {
+      final Planet planet =
+          mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
+      final List<Tile> tiles = List<Tile>.of(planet.tiles);
+      // 4 monstres simples déjà posés sur le plateau.
+      int placed = 0;
+      for (int i = 0; i < tiles.length && placed < 4; i++) {
+        final Position p = Position(tiles[i].x, tiles[i].y);
+        if (tiles[i].walkable &&
+            !BoardConstants.startPositions.contains(p)) {
+          tiles[i] = tiles[i].copyWith(monster: Monster.forCard('Wampa', 3));
+          placed++;
+        }
+      }
+      final Planet crafted = planet.withTiles(tiles);
+      // Joueur N3 à 990 XP : tuer un Sarlacc (50 XP) le fait passer N4.
+      final Player player = _player(faction: Faction.jedi, level: 3)
+          .copyWith(xp: 990, hp: 2000, maxHp: 2000);
+      final Position target = mapService
+          .validMoveTargets(
+              planet: crafted, players: <Player>[player], activePlayerIndex: 0)
+          .first;
+      final List<Tile> tiles2 = List<Tile>.of(crafted.tiles);
+      tiles2[target.y * crafted.width + target.x] =
+          tiles2[target.y * crafted.width + target.x]
+              .copyWith(monster: Monster.forCard('Sarlacc', 5));
+      final Planet crafted2 = crafted.withTiles(tiles2);
+
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final GameController controller =
+          container.read(gameControllerProvider.notifier);
+      controller.state = _duelState(crafted2, <Player>[player], movement: 1)
+          .copyWith(
+              planets: <PlanetType, Planet>{PlanetType.hoth: crafted2});
+
+      final MoveResult moveResult =
+          controller.moveActivePlayerTo(target.x, target.y);
+      expect(moveResult, MoveResult.monsterEncounter);
+
+      final CombatController combat =
+          container.read(combatControllerProvider.notifier);
+      combat.startMonsterCombat(target);
+      int guard = 0;
+      while (!(container.read(combatControllerProvider)?.finished ?? false)) {
+        combat.attack();
+        guard++;
+        expect(guard, lessThan(60), reason: 'le combat doit se terminer');
+      }
+
+      final GameState after = container.read(gameControllerProvider)!;
+      expect(after.activePlayer.level, greaterThanOrEqualTo(4),
+          reason: '1040 XP fait passer le joueur au niveau 4 (voire 5)');
+      expect(controller.doubleMonstersAnnounced, isTrue);
+      expect(controller.doubleMonstersPending, isTrue,
+          reason: 'annonce « 👥 Des doubles monstres apparaissent ! »');
+      final int doubles = after.currentPlanet.tiles
+          .where((Tile t) => t.monster != null && t.monster2 != null)
+          .length;
+      expect(doubles, greaterThanOrEqualTo(1),
+          reason: 'des cases doubles monstres sont ajoutées au premier N4');
     });
 
     test('FIX 20/09 : le gagnant Big Four est annoncé par sa FACTION', () {

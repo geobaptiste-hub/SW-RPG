@@ -30,10 +30,16 @@ class MapService {
     // chaque pose de bloc, il aboutit statistiquement toujours.
     // L'ancre de la porte est tirée avec un RNG dédié (Cantina — 19/09).
     final Position? cantinaDoor = _pickCantinaAnchor(Random(seed + 0xC0FFEE));
+    // La PORTE DE TÉLÉPORTATION (retours playtest 20/09) : seconde case
+    // cachée, protégée du blocage, jamais sur la porte de la cantina.
+    final Position? teleportDoor =
+        _pickTeleportAnchor(Random(seed + 0x7E1E10), cantinaDoor);
     // Nombre d'essais de sécurité : l'algorithme garantit la connectivité à
     // chaque pose de bloc, il aboutit statistiquement toujours.
     for (int attempt = 0; attempt < 200; attempt++) {
-      final Planet? planet = _tryGeneratePlanet(type, rng, cantinaDoor);
+      final Planet? planet = _tryGeneratePlanet(
+          type, rng, cantinaDoor,
+          teleportDoor: teleportDoor);
       if (planet != null) return planet;
     }
     throw StateError(
@@ -45,6 +51,24 @@ class MapService {
   /// Candidates : toute case hors départs.
   Position? cantinaAnchorFor(int seed) =>
       _pickCantinaAnchor(Random(seed + 0xC0FFEE));
+
+  /// Position de la PORTE DE TÉLÉPORTATION pour une graine : déterministe,
+  /// hors départs, jamais sur la porte de la cantina.
+  Position? teleportAnchorFor(int seed) =>
+      _pickTeleportAnchor(Random(seed + 0x7E1E10), cantinaAnchorFor(seed));
+
+  Position? _pickTeleportAnchor(Random rng, Position? exclude) {
+    final Set<Position> starts = BoardConstants.startPositions.toSet();
+    final List<Position> candidates = <Position>[
+      for (int y = 0; y < BoardConstants.gridHeight; y++)
+        for (int x = 0; x < BoardConstants.gridWidth; x++)
+          if (!starts.contains(Position(x, y)) &&
+              Position(x, y) != exclude)
+            Position(x, y),
+    ];
+    if (candidates.isEmpty) return null;
+    return candidates[rng.nextInt(candidates.length)];
+  }
 
   Position? _pickCantinaAnchor(Random rng) {
     final Set<Position> starts = BoardConstants.startPositions.toSet();
@@ -89,8 +113,9 @@ class MapService {
   Planet? _tryGeneratePlanet(
     PlanetType type,
     Random rng,
-    Position? cantinaDoor,
-  ) {
+    Position? cantinaDoor, {
+    Position? teleportDoor,
+  }) {
     final int width = BoardConstants.gridWidth;
     final int height = BoardConstants.gridHeight;
 
@@ -102,6 +127,7 @@ class MapService {
     // retours playtest 19/09 v2).
     final Set<Position> protected = <Position>{
       if (cantinaDoor != null) cantinaDoor,
+      if (teleportDoor != null) teleportDoor,
     };
 
     bool isBlocked(int x, int y) => blocked.contains(Position(x, y));
@@ -277,6 +303,7 @@ class MapService {
     required Set<Position> occupied,
     required Random rng,
     Position? cantinaDoor,
+    Position? teleportDoor,
   }) {
     final Set<Position> starts = BoardConstants.startPositions.toSet();
     final List<Position> candidates = <Position>[];
@@ -287,9 +314,9 @@ class MapService {
           occupied.contains(position)) {
         continue;
       }
-      // Jamais de portail SUR la porte de la cantina ni DANS la cantina
-      // (retours playtest 19/09).
-      if (tile.cantina || position == cantinaDoor) {
+      // Jamais de portail SUR la porte de la cantina ou de téléportation,
+      // ni DANS la cantina (retours playtest 19-20/09).
+      if (tile.cantina || position == cantinaDoor || position == teleportDoor) {
         continue;
       }
       if (tile.monster != null ||

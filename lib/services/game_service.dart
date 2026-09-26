@@ -10,6 +10,7 @@ import '../core/constants/planet_constants.dart'
 import '../core/constants/enums.dart'
     show AllyType, GamePhase, GameMode, GameStatus, Rarity, TeamSide;
 import '../core/constants/game_constants.dart';
+import '../core/constants/monster_constants.dart';
 import '../models/ally.dart';
 import '../models/boss.dart';
 import '../models/cantina_zone.dart';
@@ -18,6 +19,7 @@ import '../models/planet.dart';
 import '../models/player.dart';
 import '../models/portal.dart';
 import '../models/armor.dart';
+import '../models/teleport_portal.dart';
 import '../models/tile.dart';
 import '../models/weapon.dart';
 import 'map_service.dart';
@@ -71,6 +73,10 @@ enum MoveResult {
 
   /// Entrée dans la CANTINA par sa case-portail (retours playtest 19/09).
   cantinaTravel,
+
+  /// Case de TÉLÉPORTATION utilisée : projection vers un point éloigné
+  /// (retours playtest 20/09).
+  teleport,
 
   /// Case de consommations de la CANTINA : PV remis au maximum (retours
   /// playtest 19/09).
@@ -237,8 +243,10 @@ class GameController extends Notifier<GameState?> {
 
     // La PORTE de la cantina est ancrée de façon déterministe par la seed
     // (une case de la planète principale qui sert de portail vers la
-    // mini-zone 3x3 — retours playtest 19/09 v2).
+    // mini-zone 3x3 — retours playtest 19/09 v2). La CASE DE TÉLÉPORTATION
+    // est ancrée de la même façon (retours playtest 20/09).
     final Position? cantinaDoor = _mapService.cantinaAnchorFor(seed);
+    final Position? teleportDoor = _mapService.teleportAnchorFor(seed);
 
     GameState state = GameState(
       schemaVersion: GameState.currentSchemaVersion,
@@ -260,6 +268,9 @@ class GameController extends Notifier<GameState?> {
       cantina: cantinaDoor == null
           ? null
           : CantinaZone(planet: config.planetType, anchor: cantinaDoor),
+      teleport: teleportDoor == null
+          ? null
+          : TeleportPortal(planet: config.planetType, position: teleportDoor),
       status: GameStatus.inProgress,
     );
 
@@ -278,8 +289,9 @@ class GameController extends Notifier<GameState?> {
       bossUnlocked: false,
       avoidPositions: <Position>{
         ..._bossPositions(state, planet.type),
-        // Aucun contenu tiré sur la porte de la cantina.
+        // Aucun contenu tiré sur la porte de la cantina ni de téléport.
         if (state.cantina != null) state.cantina!.anchor,
+        if (state.teleport != null) state.teleport!.position,
       },
     );
     final Map<PlanetType, Planet> planets = <PlanetType, Planet>{
@@ -462,9 +474,11 @@ class GameController extends Notifier<GameState?> {
       existingPortals: current.portals,
       avoidPositions: <Position>{
         ..._bossPositions(current, movingPlanet),
-        // Aucun contenu tiré sur la porte de la cantina.
+        // Aucun contenu tiré sur la porte de la cantina ni de téléport.
         if (current.cantina?.planet == movingPlanet)
           current.cantina!.anchor,
+        if (current.teleport?.planet == movingPlanet)
+          current.teleport!.position,
       },
       bossUnlocked: current.players
           .any((Player p) => !p.eliminated && p.level >= 5),
@@ -637,6 +651,16 @@ class GameController extends Notifier<GameState?> {
       return _enterCantina(newPlayers, current);
     }
 
+    // CASE DE TÉLÉPORTATION (retours playtest 20/09) : projection vers un
+    // point ÉLOIGNÉ et libre de la planète. Invisible avant la première
+    // utilisation, puis le portail « reste ouvert » (image affichée).
+    final TeleportPortal? teleportPortal = current.teleport;
+    if (teleportPortal != null &&
+        moving.planet == teleportPortal.planet &&
+        target == teleportPortal.position) {
+      return _useTeleportPortal(newPlayers, current, teleportPortal);
+    }
+
     // Voyage par portail (Sprint 5) : aller-retour miroir.
     if (!PlanetConstants.startPlanets.contains(moving.planet)) {
       // CANTINA : la case d'entrée (1,2) sert de sortie (retours playtest
@@ -667,6 +691,69 @@ class GameController extends Notifier<GameState?> {
       return _travelThroughPortal(portal, newPlayers, current);
     }
     return MoveResult.moved;
+  }
+
+  /// CASE DE TÉLÉPORTATION (retours playtest 20/09) : projette le joueur
+  /// vers un point ÉLOIGNÉ (≥ 12 cases, repli sur le meilleur disponible)
+  /// de la planète, libre de tout contenu et de tout autre joueur. La
+  /// première utilisation marque le portail « visité » (image affichée).
+  MoveResult _useTeleportPortal(
+      List<Player> newPlayers, GameState current, TeleportPortal portal) {
+    final Planet planet = current.currentPlanet;
+    final Set<Position> occupied = <Position>{
+      for (final Player p in current.players)
+        if (!p.eliminated && p.id != current.activePlayer.id) p.position,
+    };
+    final List<Position> far = <Position>[];
+    final List<Position> any = <Position>[];
+    for (final Tile t in planet.tiles) {
+      final Position p = Position(t.x, t.y);
+      if (!t.walkable ||
+          occupied.contains(p) ||
+          p == portal.position ||
+          p == current.activePlayer.position) {
+        continue;
+      }
+      if (t.monster != null ||
+          t.monster2 != null ||
+          t.ally != null ||
+          t.weapon != null ||
+          t.armor != null ||
+          t.healSite ||
+          t.cantina) {
+        continue;
+      }
+      any.add(p);
+      if (p.chebyshevDistanceTo(portal.position) >= 12) far.add(p);
+    }
+    final List<Position> pool = far.isNotEmpty ? far : any;
+    if (pool.isEmpty) return MoveResult.moved;
+    final Position destination = pool[_diceRandom.nextInt(pool.length)];
+
+    final int index = current.currentPlayerIndex;
+    final List<Player> players = List<Player>.of(newPlayers);
+    players[index] = players[index].copyWith(position: destination);
+    log('🌀 ${players[index].name} est téléporté à l’autre bout de la '
+        'planète !');
+
+    // Révélation autour du point d'arrivée.
+    final Planet revealed =
+        _mapService.revealFogAround(planet, destination);
+    final Map<PlanetType, Planet> planets = <PlanetType, Planet>{
+      ...current.planets,
+      planet.type: revealed,
+    };
+
+    state = _applySurvivorCheck(current.copyWith(
+      players: players,
+      planets: planets,
+      currentPlanet: revealed,
+      // Première utilisation : le portail devient visible (image).
+      teleport:
+          portal.visited ? null : portal.copyWith(visited: true),
+      movementPointsRemaining: current.movementPointsRemaining - 1,
+    ));
+    return MoveResult.teleport;
   }
 
   /// Entrée dans la CANTINA (retours playtest 19/09 v2) : la porte de la
@@ -864,6 +951,9 @@ class GameController extends Notifier<GameState?> {
     final Set<Position> bossPositions = _bossPositions(state!, planet.type);
     final Position? cantinaDoor =
         (state!.cantina?.planet == planet.type) ? state!.cantina!.anchor : null;
+    final Position? teleportDoor = (state!.teleport?.planet == planet.type)
+        ? state!.teleport!.position
+        : null;
     // Un SOIN redéposé ne doit pas être voisin d'un autre soin (retours
     // playtest 20/09 : jamais deux soins sur des cases voisines).
     bool healSiteNearby(Position p) {
@@ -892,6 +982,7 @@ class GameController extends Notifier<GameState?> {
             !isPortalTile(Position(t.x, t.y)) &&
             !bossPositions.contains(Position(t.x, t.y)) &&
             Position(t.x, t.y) != cantinaDoor &&
+            Position(t.x, t.y) != teleportDoor &&
             // Jamais de carte redéposée DANS la cantina (retours playtest
             // 19/09 : zone sans combat ni contenu).
             !t.cantina &&
@@ -1381,6 +1472,8 @@ class GameController extends Notifier<GameState?> {
       avoidPositions: <Position>{
         ..._bossPositions(next, nextPlanet.type),
         if (next.cantina?.planet == nextPlanet.type) next.cantina!.anchor,
+        if (next.teleport?.planet == nextPlanet.type)
+          next.teleport!.position,
       },
       bossUnlocked: next.players
           .any((Player p) => !p.eliminated && p.level >= 5),
@@ -1417,6 +1510,7 @@ class GameController extends Notifier<GameState?> {
     }
 
     _maybeSpawnBosses();
+    _maybeSpawnDoubleMonsters();
     next = _checkVictoryConditions(next);
     next = next.copyWith(savedAt: DateTime.now());
     state = next;
@@ -1440,12 +1534,6 @@ class GameController extends Notifier<GameState?> {
     }
     if (newLevel == player.level) {
       return player.copyWith(xp: total);
-    }
-    // Retours playtest 20/09 : au PREMIER joueur niveau 4, les « doubles
-    // monstres » apparaissent (annoncés une seule fois par partie).
-    if (newLevel >= 4 && !doubleMonstersAnnounced) {
-      doubleMonstersAnnounced = true;
-      doubleMonstersPending = true;
     }
     log('⬆ ${player.name} atteint le niveau $newLevel !');
     return player.copyWith(
@@ -1509,6 +1597,7 @@ class GameController extends Notifier<GameState?> {
     // Après l'affectation : le spawn repart du nouvel état (une victoire
     // peut faire passer le joueur N5) et n'est pas écrasé.
     _maybeSpawnBosses();
+    _maybeSpawnDoubleMonsters();
     return MonsterVictoryOutcome(
         playerHp: updated.hp,
         playerEliminated: updated.eliminated,
@@ -1634,6 +1723,7 @@ class GameController extends Notifier<GameState?> {
     // Après l'affectation : le spawn repart du nouvel état (un joueur peut
     // passer N5 grâce à l'XP de chasseur) et n'est pas écrasé.
     _maybeSpawnBosses();
+    _maybeSpawnDoubleMonsters();
   }
 
   // ---------------------------------------------------------------------------
@@ -1739,9 +1829,12 @@ class GameController extends Notifier<GameState?> {
         portals: next.portals,
         occupied: occupied,
         rng: _diceRandom,
-        // Jamais de portail SUR la porte de la cantina.
+        // Jamais de portail SUR la porte de la cantina ou de téléport.
         cantinaDoor:
             next.cantina?.planet == mainType ? next.cantina!.anchor : null,
+        teleportDoor: next.teleport?.planet == mainType
+            ? next.teleport!.position
+            : null,
       );
       if (spot == null) break;
 
@@ -1777,6 +1870,81 @@ class GameController extends Notifier<GameState?> {
   /// joueur actif atteint le niveau 5 (une seule fois par planète). Position
   /// : la case jouable la plus éloignée du portail central, de préférence non
   /// découverte.
+  /// PREMIER joueur niveau 4 (retours playtest 20/09) : annonce et ajout
+  /// de ~20 % de cases « doubles monstres » EN PLUS sur chaque planète
+  /// générée (le plateau était déjà exploré en grande partie au N4 — les
+  /// nouvelles découvertes seules n'auraient presque jamais montré de
+  /// doubles). Une seule fois par partie.
+  void _maybeSpawnDoubleMonsters() {
+    final GameState? s = state;
+    if (s == null || s.status != GameStatus.inProgress) return;
+    if (!s.players.any((Player p) => !p.eliminated && p.level >= 4)) return;
+    if (doubleMonstersAnnounced) return;
+    doubleMonstersAnnounced = true;
+    doubleMonstersPending = true;
+    log('👥 Des doubles monstres apparaissent !');
+
+    final Map<PlanetType, Planet> planets = Map<PlanetType, Planet>.of(s.planets);
+    for (final PlanetType type in planets.keys.toList()) {
+      final Planet planet = planets[type]!;
+      final Set<Position> occupied = <Position>{
+        for (final Player p in s.players)
+          if (p.planet == type && !p.eliminated) p.position,
+      };
+      final int existing =
+          planet.tiles.where((Tile t) => t.monster != null).length;
+      final int target = (existing * 0.2).round();
+      if (target <= 0) continue;
+
+      // Cases candidates : jouables, sans contenu, hors départs, hors
+      // joueurs, hors portails, hors porte/cantine.
+      final List<Position> candidates = <Position>[
+        for (final Tile t in planet.tiles)
+          if (t.walkable &&
+              t.monster == null &&
+              t.monster2 == null &&
+              t.ally == null &&
+              t.weapon == null &&
+              t.armor == null &&
+              !t.healSite &&
+              !t.cantina &&
+              !BoardConstants.startPositions.contains(Position(t.x, t.y)) &&
+              !occupied.contains(Position(t.x, t.y)) &&
+              !s.portals.any((Portal p) => p.position == Position(t.x, t.y)) &&
+              !(s.cantina?.planet == type &&
+                  s.cantina!.anchor == Position(t.x, t.y)) &&
+              !(s.teleport != null &&
+                  s.teleport!.planet == type &&
+                  s.teleport!.position == Position(t.x, t.y)))
+            Position(t.x, t.y),
+      ];
+      candidates.shuffle(_diceRandom);
+
+      final List<Tile> tiles = List<Tile>.of(planet.tiles);
+      int placed = 0;
+      for (final Position position in candidates) {
+        if (placed >= target) break;
+        final int index = position.y * planet.width + position.x;
+        tiles[index] = tiles[index].copyWith(
+          monster: MonsterConstants.randomLowMonster(_diceRandom),
+          monster2: MonsterConstants.randomLowMonster(_diceRandom),
+        );
+        placed++;
+      }
+      if (placed > 0) {
+        planets[type] = planet.withTiles(tiles);
+        log('👥 $placed doubles monstres surgissent sur '
+            '${PlanetConstants.displayNames[type] ?? type.name} !');
+      }
+    }
+    // FIX : synchroniser currentPlanet avec la planète modifiée (même
+    // mécanique que le fix « toujours la même carte » du 19/09).
+    state = s.copyWith(
+      planets: planets,
+      currentPlanet: planets[s.planetType] ?? s.currentPlanet,
+    );
+  }
+
   void _maybeSpawnBosses() {
     final GameState? s = state;
     if (s == null || s.status != GameStatus.inProgress) return;

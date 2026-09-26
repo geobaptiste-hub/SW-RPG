@@ -1,0 +1,8 @@
+Déposez ici l'image du PORTAIL DE TÉLÉPORTATION — sans recompilation.
+PNG ou JPG acceptés.
+
+  portail.jpg / portail.png — médaillon affiché sur la case de
+        téléportation UNE FOIS qu'elle a été utilisée au moins une fois
+        (invisible avant). Format carré conseillé (~256x256).
+
+Sans image : médaillon doré avec un éclair (aucune erreur).

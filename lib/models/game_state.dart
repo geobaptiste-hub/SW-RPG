@@ -2,6 +2,7 @@ import '../core/constants/enums.dart';
 import '../core/utils/json_utils.dart';
 import 'boss.dart';
 import 'cantina_zone.dart';
+import 'teleport_portal.dart';
 import 'planet.dart';
 import 'player.dart';
 import 'portal.dart';
@@ -64,6 +65,10 @@ class GameState {
   /// 19/09) ; `null` pour les parties créées avant cette fonctionnalité.
   final CantinaZone? cantina;
 
+  /// La CASE DE TÉLÉPORTATION (planète principale — retours playtest
+  /// 20/09) ; `null` pour les parties créées avant cette fonctionnalité.
+  final TeleportPortal? teleport;
+
   final GameStatus status;
   final DateTime? savedAt;
 
@@ -85,6 +90,7 @@ class GameState {
     required this.bosses,
     required this.portals,
     this.cantina,
+    this.teleport,
     required this.status,
     this.savedAt,
   });
@@ -118,6 +124,7 @@ class GameState {
     List<Boss>? bosses,
     List<Portal>? portals,
     CantinaZone? cantina,
+    TeleportPortal? teleport,
     GameStatus? status,
     DateTime? savedAt,
   }) {
@@ -141,6 +148,7 @@ class GameState {
       bosses: bosses ?? this.bosses,
       portals: portals ?? this.portals,
       cantina: cantina ?? this.cantina,
+      teleport: teleport ?? this.teleport,
       status: status ?? this.status,
       savedAt: savedAt ?? this.savedAt,
     );
@@ -170,6 +178,7 @@ class GameState {
         'bosses': bosses.map((Boss boss) => boss.toJson()).toList(),
         'portals': portals.map((Portal portal) => portal.toJson()).toList(),
         if (cantina != null) 'cantina': cantina!.toJson(),
+        if (teleport != null) 'teleport': teleport!.toJson(),
         'status': enumToName(status),
         'savedAt': savedAt?.toIso8601String(),
       };
@@ -208,6 +217,9 @@ class GameState {
       cantina: json['cantina'] == null
           ? null
           : CantinaZone.fromJson(json['cantina']),
+      teleport: json['teleport'] == null
+          ? null
+          : TeleportPortal.fromJson(json['teleport']),
       status: enumFromName(
           GameStatus.values, json['status'], GameStatus.inProgress),
       savedAt: json['savedAt'] == null
