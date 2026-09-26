@@ -34,6 +34,27 @@ class GameOverScreen extends ConsumerWidget {
   /// Détermine le gagnant à partir de l'état final (miroir des règles de
   /// GameController._checkVictoryConditions / _applySurvivorCheck).
   static WinnerResolution resolveWinner(GameState state) {
+    // Big Four (retours playtest 20/09) : les équipes étant mono-faction,
+    // le titre annonce la FACTION gagnante au lieu de la lettre d'équipe.
+    Faction winningFaction(List<Player> members) {
+      final Map<Faction, int> counts = <Faction, int>{};
+      for (final Player p in members) {
+        counts[p.faction] = (counts[p.faction] ?? 0) + 1;
+      }
+      Faction best = members.first.faction;
+      for (final MapEntry<Faction, int> entry in counts.entries) {
+        if (entry.value > counts[best]!) best = entry.key;
+      }
+      return best;
+    }
+
+    String teamTitle(List<Player> members) =>
+        state.mode == GameMode.bigFour
+            ? 'La faction ${winningFaction(members).displayName} remporte '
+                'la partie !'
+            : 'L’équipe ${members.first.team!.displayName} remporte la '
+                'partie !';
+
     if (state.mode == GameMode.chacunPourSoi) {
       // 1) Victoire par objectifs : 3 boss de factions adverses.
       for (final Player player in state.players) {
@@ -94,7 +115,7 @@ class GameOverScreen extends ConsumerWidget {
             .where((Player p) => factionIsLight(p.faction))
             .length;
         return (
-          title: 'L’équipe ${side.displayName} remporte la partie !',
+          title: teamTitle(members),
           detail: 'Victoire par objectifs : $adverse boss adverses vaincus '
               'par l’équipe.',
           lightSide: lightMembers * 2 >= members.length,
@@ -114,7 +135,7 @@ class GameOverScreen extends ConsumerWidget {
           .where((Player p) => factionIsLight(p.faction))
           .length;
       return (
-        title: 'L’équipe ${winner.displayName} remporte la partie !',
+        title: teamTitle(members),
         detail: 'Dernière équipe debout de la galaxie.',
         lightSide: lightMembers * 2 >= members.length,
       );

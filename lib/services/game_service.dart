@@ -854,6 +854,22 @@ class GameController extends Notifier<GameState?> {
     final Set<Position> bossPositions = _bossPositions(state!, planet.type);
     final Position? cantinaDoor =
         (state!.cantina?.planet == planet.type) ? state!.cantina!.anchor : null;
+    // Un SOIN redéposé ne doit pas être voisin d'un autre soin (retours
+    // playtest 20/09 : jamais deux soins sur des cases voisines).
+    bool healSiteNearby(Position p) {
+      for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+          if (dx == 0 && dy == 0) continue;
+          final int nx = p.x + dx;
+          final int ny = p.y + dy;
+          if (nx < 0 || ny < 0 || nx >= planet.width || ny >= planet.height) {
+            continue;
+          }
+          if (planet.tileAt(nx, ny).healSite) return true;
+        }
+      }
+      return false;
+    }
 
     final List<Tile> candidates = <Tile>[
       for (final Tile t in planet.tiles)
@@ -873,7 +889,9 @@ class GameController extends Notifier<GameState?> {
             t.ally == null &&
             t.weapon == null &&
             t.armor == null &&
-            !t.healSite)
+            !t.healSite &&
+            !(kind == TileEventKind.healSite &&
+                healSiteNearby(Position(t.x, t.y))))
           t,
     ];
 

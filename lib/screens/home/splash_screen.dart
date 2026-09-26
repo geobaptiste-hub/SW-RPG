@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/theme/app_theme.dart';
 import '../../widgets/app_background.dart';
 
 /// Splash de démarrage (retours playtest 20/09) : affiché 1 seconde au
@@ -29,35 +28,12 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Retours playtest 20/09 : l'image seule (pas de texte superposé —
+    // l'image déposée fait déjà office de logo).
     return Scaffold(
       body: AppBackground(
         imageId: 'screens/splash',
-        child: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                'STAR WARS',
-                style: TextStyle(
-                  color: AppColors.gold,
-                  fontSize: 44,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 2,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'R P G',
-                style: TextStyle(
-                  color: AppColors.blue,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
+        child: const SizedBox.expand(),
       ),
     );
   }

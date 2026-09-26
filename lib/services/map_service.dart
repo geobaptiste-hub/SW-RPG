@@ -443,7 +443,26 @@ class MapService {
                 armor: CardConstants.randomArmorCard(rng)));
           }
         case 'soin':
-          tiles.add(newTile.copyWith(healSite: true));
+          // Retours playtest 20/09 : jamais deux soins sur des cases
+          // voisines (Chebyshev 1) — on vérifie l'état révélé ET les
+          // cases déjà décidées dans CE passage.
+          bool healNearby = false;
+          for (int dy = -1; dy <= 1 && !healNearby; dy++) {
+            for (int dx = -1; dx <= 1 && !healNearby; dx++) {
+              if (dx == 0 && dy == 0) continue;
+              final int nx = newTile.x + dx;
+              final int ny = newTile.y + dy;
+              if (nx < 0 || ny < 0 || nx >= after.width || ny >= after.height) {
+                continue;
+              }
+              final int neighborIndex = ny * after.width + nx;
+              if (after.tiles[neighborIndex].healSite ||
+                  (neighborIndex < tiles.length && tiles[neighborIndex].healSite)) {
+                healNearby = true;
+              }
+            }
+          }
+          tiles.add(newTile.copyWith(healSite: !healNearby));
         case 'portail':
           // Sprint 5 : uniquement sur le bord du plateau, max 4, destinations
           // différentes. La planète liée est générée par le GameService.

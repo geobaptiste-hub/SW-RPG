@@ -19,6 +19,8 @@ import 'package:star_wars_rpg/models/portal.dart';
 import 'package:star_wars_rpg/models/player.dart';
 import 'package:star_wars_rpg/models/tile.dart';
 import 'package:star_wars_rpg/models/weapon.dart';
+import 'package:star_wars_rpg/screens/game_over/game_over_screen.dart'
+    show GameOverScreen, WinnerResolution;
 import 'package:star_wars_rpg/services/combat_service.dart';
 import 'package:star_wars_rpg/services/game_service.dart';
 import 'package:star_wars_rpg/services/map_service.dart';
@@ -1136,6 +1138,47 @@ void main() {
       expect(created.players[4].faction, Faction.sith);
       expect(created.players[6].faction, Faction.empire);
     });
+
+    test('FIX 20/09 : le gagnant Big Four est annoncé par sa FACTION', () {
+      // Équipe D (Empire : deux joueurs) atteint 3 boss ADVERSES.
+      final GameState base = _duelState(
+        mapService.generateStartPlanet(PlanetType.hoth, seed: 42),
+        <Player>[
+          _player(faction: Faction.empire, position: const Position(0, 0))
+              .copyWith(team: TeamSide.teamD),
+          _player(faction: Faction.empire, position: const Position(1, 1))
+              .copyWith(team: TeamSide.teamD),
+          _player(faction: Faction.rebel, position: const Position(2, 2))
+              .copyWith(team: TeamSide.teamA),
+          _player(faction: Faction.rebel, position: const Position(3, 3))
+              .copyWith(team: TeamSide.teamA),
+          _player(faction: Faction.jedi, position: const Position(4, 4))
+              .copyWith(team: TeamSide.teamB),
+          _player(faction: Faction.jedi, position: const Position(5, 5))
+              .copyWith(team: TeamSide.teamB),
+          _player(faction: Faction.sith, position: const Position(6, 6))
+              .copyWith(team: TeamSide.teamC),
+          _player(faction: Faction.sith, position: const Position(7, 7))
+              .copyWith(team: TeamSide.teamC),
+        ],
+      ).copyWith(mode: GameMode.bigFour);
+      final List<Player> players = List<Player>.of(base.players);
+      players[0] = players[0].copyWith(
+        defeatedBosses: const <BossType>[
+          BossType.exogorth, // Sith (adverse)
+          BossType.kraytDragon, // Rebel (adverse)
+          BossType.rancor, // Jedi (adverse)
+        ],
+      );
+      final GameState state = base.copyWith(players: players);
+
+      final WinnerResolution winner = GameOverScreen.resolveWinner(state);
+
+      expect(winner.title, 'La faction Empire remporte la partie !',
+          reason: 'en Big Four, la FACTION gagnante est annoncée '
+              '(et non « Équipe D »)');
+    });
+
 
     test('la case d\'un coéquipier Big Four n\'est pas entrable', () {
       final Planet planet =

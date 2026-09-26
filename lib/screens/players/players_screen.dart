@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/constants/planet_constants.dart' show PlanetConstants;
 import '../../core/utils/slug.dart';
 import '../../services/image_service.dart';
 import '../../models/boss.dart' show BossType;
@@ -142,11 +143,12 @@ class _PlayerCard extends ConsumerWidget {
                           label: '💀 Éliminé',
                           color: AppColors.danger,
                         ),
-                      for (final BossType boss in player.defeatedBosses)
-                        _StatChip(
-                          label: '🏆 ${boss.displayName}',
-                          color: AppColors.gold,
-                        ),
+    for (final BossType boss in player.defeatedBosses)
+      _StatChip(
+        label: '🏆 ${boss.displayName} '
+            '(${PlanetConstants.bossFactionByType[boss]!.displayName})',
+        color: AppColors.gold,
+      ),
                     ],
                   ),
                 ],

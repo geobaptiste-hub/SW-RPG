@@ -1,6 +1,9 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:star_wars_rpg/core/constants/board_constants.dart';
+import 'package:star_wars_rpg/core/constants/enums.dart' show GamePhase;
 import 'package:star_wars_rpg/models/planet.dart';
 import 'package:star_wars_rpg/models/player.dart';
 import 'package:star_wars_rpg/models/tile.dart';
@@ -127,6 +130,53 @@ void main() {
             reason: 'Entrer sur la case dun adversaire déclenche un combat');
         expect(targets.length, lessThanOrEqualTo(3));
       }
+    });
+  });
+
+  group('Placement des cases de soin (fix 20/09)', () {
+    test('populate : jamais deux soins sur des cases voisines', () {
+      final Planet planet = generate(seed: 7);
+      final Planet revealed = mapService.revealFogAround(
+        planet,
+        const Position(10, 10),
+        radius: 30,
+      );
+      final populate = mapService.populateNewlyDiscoveredTiles(
+        before: planet,
+        after: revealed,
+        phase: GamePhase.fin,
+        rng: Random(5),
+        occupied: const <Position>{},
+        existingPortals: const [],
+        bossUnlocked: false,
+      );
+
+      int healCount = 0;
+      for (final Tile tile in populate.planet.tiles) {
+        if (!tile.healSite) continue;
+        healCount++;
+        for (int dy = -1; dy <= 1; dy++) {
+          for (int dx = -1; dx <= 1; dx++) {
+            if (dx == 0 && dy == 0) continue;
+            final int nx = tile.x + dx;
+            final int ny = tile.y + dy;
+            if (nx < 0 ||
+                ny < 0 ||
+                nx >= planet.width ||
+                ny >= planet.height) {
+              continue;
+            }
+            expect(
+              populate.planet.tileAt(nx, ny).healSite,
+              isFalse,
+              reason: 'deux soins voisins interdits : '
+                  '(${tile.x},${tile.y}) et ($nx,$ny)',
+            );
+          }
+        }
+      }
+      expect(healCount, greaterThan(0),
+          reason: 'en phase fin sur tout le plateau, au moins un soin sort');
     });
   });
 }
