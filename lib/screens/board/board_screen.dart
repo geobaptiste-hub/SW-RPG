@@ -578,6 +578,13 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
         );
         controller.bossAwakeningPlanets.clear();
       }
+      if (controller.doubleMonstersPending) {
+        controller.doubleMonstersPending = false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('👥 Des doubles monstres apparaissent !')),
+        );
+      }
     });
 
     // Le joueur actif éliminé pendant son tour : fin de tour automatique.

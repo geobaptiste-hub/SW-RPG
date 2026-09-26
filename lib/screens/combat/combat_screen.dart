@@ -98,7 +98,10 @@ class _CombatScreenState extends ConsumerState<CombatScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(switch (session.kind) {
-          CombatKind.monster => 'Combat — ${session.monster!.name}',
+          CombatKind.monster => session.monster2 == null
+              ? 'Combat — ${session.monster!.name}'
+              : 'Combat — ${session.monster!.name} & '
+                  '${session.monster2!.name}',
           CombatKind.boss => 'Boss — ${session.bossType!.displayName}',
           CombatKind.player => 'Combat — ${session.defenderName}',
         }),
@@ -172,7 +175,30 @@ class _CombatScreenState extends ConsumerState<CombatScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                         child: switch (session.kind) {
-                      CombatKind.monster => _MonsterCard(session: session),
+                      CombatKind.monster when session.monster2 != null =>
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: _MonsterCard(
+                                monster: session.monster!,
+                                hpRemaining: session.monsterHpRemaining,
+                                compact: true,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: _MonsterCard(
+                                monster: session.monster2!,
+                                hpRemaining: session.monsterHpRemaining,
+                                compact: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                      CombatKind.monster => _MonsterCard(
+                          monster: session.monster!,
+                          hpRemaining: session.monsterHpRemaining,
+                        ),
                       CombatKind.boss => _BossCard(session: session),
                       CombatKind.player => _FighterCard(
                           title: session.defenderName ?? '',
@@ -385,14 +411,25 @@ class _CenterPanel extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _MonsterCard extends StatelessWidget {
-  final CombatSession session;
+  /// Monstre à afficher + PV du pool partagé (doubles monstres : les deux
+  /// cartes montrent le même pool combiné — retours playtest 20/09).
+  final Monster monster;
+  final int hpRemaining;
 
-  const _MonsterCard({required this.session});
+  /// Version resserrée pour l'affichage de DEUX monstres côte à côte.
+  final bool compact;
+
+  const _MonsterCard({
+    required this.monster,
+    required this.hpRemaining,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final Monster monster = session.monster!;
+    final Monster monster = this.monster;
+    final double imageSize = compact ? 48 : 72;
     final IconData icon = switch (monster.level) {
       1 => Icons.pest_control,
       2 => Icons.pest_control_rodent,
@@ -403,14 +440,14 @@ class _MonsterCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(compact ? 8 : 14),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CardImage(
               category: 'monsters',
               id: cardImageId(monster.name),
-              size: 72,
+              size: imageSize,
               fallback: CircleAvatar(
                 radius: 30,
                 backgroundColor: AppColors.danger.withValues(alpha: 0.25),
@@ -425,9 +462,9 @@ class _MonsterCard extends StatelessWidget {
             const SizedBox(height: 10),
             _Stat(
                 label: 'PV',
-                value: '${session.monsterHpRemaining} / ${monster.hp}'),
+                value: '$hpRemaining / ${monster.hp}'),
             _Stat(label: 'ATK', value: '${monster.attack}'),
-            _Stat(label: 'XP', value: '+${monster.xpReward}'),
+            if (!compact) _Stat(label: 'XP', value: '+${monster.xpReward}'),
           ],
         ),
       ),

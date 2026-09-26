@@ -66,6 +66,12 @@ class Tile {
   /// n'est rendu que si [discovered] (convention brouillard — Sprint 2).
   final Monster? monster;
 
+  /// SECOND monstre d'un « double monstre » (retours playtest 20/09 —
+  /// mécanique débloquée quand un joueur atteint le niveau 4) : deux
+  /// monstres de niveaux 1-3 sur la même case, stats additionnées au
+  /// combat. Null pour une case monstre simple.
+  final Monster? monster2;
+
   /// Allié proposé au recrutement sur la case (Sprint 4).
   final Ally? ally;
 
@@ -98,6 +104,7 @@ class Tile {
     this.discovered = false,
     this.visible = false,
     this.monster,
+    this.monster2,
     this.ally,
     this.weapon,
     this.armor,
@@ -113,6 +120,8 @@ class Tile {
     bool? visible,
     Monster? monster,
     bool clearMonster = false,
+    Monster? monster2,
+    bool clearMonster2 = false,
     Ally? ally,
     bool clearAlly = false,
     Weapon? weapon,
@@ -131,6 +140,7 @@ class Tile {
       discovered: discovered ?? this.discovered,
       visible: visible ?? this.visible,
       monster: clearMonster ? null : (monster ?? this.monster),
+      monster2: clearMonster2 ? null : (monster2 ?? this.monster2),
       ally: clearAlly ? null : (ally ?? this.ally),
       weapon: clearWeapon ? null : (weapon ?? this.weapon),
       armor: clearArmor ? null : (armor ?? this.armor),
@@ -151,6 +161,7 @@ class Tile {
         'discovered': discovered,
         'visible': visible,
         'monster': monster?.toJson(),
+        if (monster2 != null) 'monster2': monster2?.toJson(),
         'ally': ally?.toJson(),
         'weapon': weapon?.toJson(),
         'armor': armor?.toJson(),
@@ -170,6 +181,9 @@ class Tile {
       visible: json['visible'] as bool? ?? false,
       monster:
           json['monster'] == null ? null : Monster.fromJson(json['monster']),
+      monster2: json['monster2'] == null
+          ? null
+          : Monster.fromJson(json['monster2']),
       ally: json['ally'] == null ? null : Ally.fromJson(json['ally']),
       weapon:
           json['weapon'] == null ? null : Weapon.fromJson(json['weapon']),

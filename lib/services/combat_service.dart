@@ -76,7 +76,23 @@ class CombatSession {
   /// vs monstre : la case de la carte rencontrée.
   final Position? targetTile;
   final Monster? monster;
+
+  /// Second monstre d'un « double monstre » (retours playtest 20/09) —
+  /// null pour un combat simple. Les PV des deux monstres forment UN
+  /// pool combiné ([monsterHpRemaining]) ; l'ATK de riposte est la somme
+  /// des deux ([totalMonsterAttack]).
+  final Monster? monster2;
   final int monsterHpRemaining;
+
+  /// ATK de riposte totale : somme des monstres présents.
+  int get totalMonsterAttack => monster!.attack + (monster2?.attack ?? 0);
+
+  /// XP total du combat : somme des monstres, ×2,5 pour un double
+  /// (retours playtest 20/09 — ex. (10 + 20) ×2,5 = 75).
+  int get monsterXpReward =>
+      ((monster!.xpReward + (monster2?.xpReward ?? 0)) *
+              (monster2 == null ? 1 : 2.5))
+          .round();
 
   /// vs joueur : index du défenseur et ses PV restants.
   final int? defenderIndex;
@@ -136,6 +152,7 @@ class CombatSession {
     this.critOn5 = false,
     this.targetTile,
     this.monster,
+    this.monster2,
     this.monsterHpRemaining = 0,
     this.defenderIndex,
     this.defenderName,
@@ -179,6 +196,7 @@ class CombatSession {
       kind: kind,
       targetTile: targetTile,
       monster: monster,
+      monster2: monster2,
       monsterHpRemaining: monsterHpRemaining ?? this.monsterHpRemaining,
       defenderIndex: defenderIndex,
       defenderName: defenderName,
@@ -331,9 +349,10 @@ class CombatController extends Notifier<CombatSession?> {
 
       if (hp <= 0) {
         // Victoire (GDD §11) : +XP, retrait du monstre, soins des healers.
+        // Double monstre : XP = (somme des deux) x 2,5 (retours 20/09).
         final MonsterVictoryOutcome outcome = _game.applyMonsterVictory(
           tile: session.targetTile!,
-          xp: session.monster!.xpReward,
+          xp: session.monsterXpReward,
           playerHp: playerHp,
         );
         final int levelAfter =

@@ -1139,6 +1139,71 @@ void main() {
       expect(created.players[6].faction, Faction.empire);
     });
 
+    test('Doubles monstres (fix 20/09) : stats additionnées, XP x 2,5, '
+        'apparition après le premier N4', () {
+      // 1) Le populate SANS débloquage ne pose jamais de double.
+      final Planet planet =
+          mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
+      final Planet revealed = mapService.revealFogAround(
+        planet,
+        const Position(10, 10),
+        radius: 30,
+      );
+      final populateSimple = mapService.populateNewlyDiscoveredTiles(
+        before: planet,
+        after: revealed,
+        phase: GamePhase.fin,
+        rng: Random(3),
+        occupied: const <Position>{},
+        existingPortals: const [],
+        bossUnlocked: false,
+        doubleMonstersUnlocked: false,
+      );
+      final int simpleMonstres = populateSimple.planet.tiles
+          .where((Tile t) => t.monster != null)
+          .length;
+      final int simplesAvecDouble = populateSimple.planet.tiles
+          .where((Tile t) => t.monster != null && t.monster2 != null)
+          .length;
+      expect(simpleMonstres, greaterThan(0),
+          reason: 'des monstres simples sont posés');
+      expect(simplesAvecDouble, 0,
+          reason: 'doubles verrouillés tant que personne n’est N4');
+
+      // 2) Débloqué : ~20 % des monstres posés sont des doubles, composés
+      //    de deux monstres de niveaux 1-3, stats additionnées.
+      final populateDouble = mapService.populateNewlyDiscoveredTiles(
+        before: planet,
+        after: revealed,
+        phase: GamePhase.fin,
+        rng: Random(9),
+        occupied: const <Position>{},
+        existingPortals: const [],
+        bossUnlocked: false,
+        doubleMonstersUnlocked: true,
+      );
+      final List<Tile> doubles = populateDouble.planet.tiles
+          .where((Tile t) => t.monster != null && t.monster2 != null)
+          .toList();
+      expect(doubles, isNotEmpty,
+          reason: 'sur ~370 cases en phase fin, des doubles sortent '
+              '(probabilité 20 % par monstre posé)');
+      for (final Tile tile in doubles) {
+        expect(tile.monster!.level, inInclusiveRange(1, 3));
+        expect(tile.monster2!.level, inInclusiveRange(1, 3));
+      }
+    });
+
+    test('Doubles monstres : XP = (somme des XP) x 2,5', () {
+      // N1 (10 XP) + N2 (20 XP) → 75 XP (et non 30).
+      final Monster m1 = Monster.forCard('Gungans', 1);
+      final Monster m2 = Monster.forCard('Droïde de combat B1', 2);
+      final int xp = ((m1.xpReward + m2.xpReward) * 2.5).round();
+      expect(m1.attack + m2.attack, 15, reason: '5 + 10 ATK');
+      expect(m1.hp + m2.hp, 500, reason: '200 + 300 PV');
+      expect(xp, 75, reason: '(10 + 20) x 2,5 = 75 (et non 30)');
+    });
+
     test('FIX 20/09 : le gagnant Big Four est annoncé par sa FACTION', () {
       // Équipe D (Empire : deux joueurs) atteint 3 boss ADVERSES.
       final GameState base = _duelState(

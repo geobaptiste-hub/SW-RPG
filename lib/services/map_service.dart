@@ -381,6 +381,7 @@ class MapService {
     required List<Portal> existingPortals,
     required bool bossUnlocked,
     Set<Position> avoidPositions = const <Position>{},
+    bool doubleMonstersUnlocked = false,
   }) {
     final Set<Position> starts = BoardConstants.startPositions.toSet();
     final List<double> probabilities = switch (phase) {
@@ -429,8 +430,19 @@ class MapService {
 
       switch (event) {
         case 'monstre':
-          tiles.add(
-              newTile.copyWith(monster: MonsterConstants.randomMonster(rng)));
+          // DOUBLES MONSTRES (retours playtest 20/09) : une fois qu'un
+          // joueur atteint le niveau 4, ~20 % des nouvelles cases monstre
+          // portent DEUX monstres de niveaux 1-3 (stats additionnées au
+          // combat, XP x 2,5).
+          if (doubleMonstersUnlocked && rng.nextDouble() < 0.20) {
+            tiles.add(newTile.copyWith(
+              monster: MonsterConstants.randomLowMonster(rng),
+              monster2: MonsterConstants.randomLowMonster(rng),
+            ));
+          } else {
+            tiles.add(newTile.copyWith(
+                monster: MonsterConstants.randomMonster(rng)));
+          }
         case 'allie':
           tiles.add(newTile.copyWith(
               ally: CardConstants.randomAllyCard(rng)));

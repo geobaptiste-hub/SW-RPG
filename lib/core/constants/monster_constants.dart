@@ -61,6 +61,22 @@ class MonsterConstants {
   /// Tire une carte uniformément parmi les 56 cartes du deck (pondération
   /// naturelle : ≈ 43 % N1, 29 % N2, 14 % N3, 7 % N4, 7 % N5) et construit
   /// le monstre avec les statistiques officielles de son niveau.
+  /// Tirage pondéré restreint aux niveaux 1-3 (retours playtest 20/09 :
+  /// les « doubles monstres » associent deux monstres de niveaux 1 à 3).
+  static Monster randomLowMonster(Random rng) {
+    final List<MonsterCard> pool = deck
+        .where((MonsterCard card) => card.level >= 1 && card.level <= 3)
+        .toList();
+    final int total =
+        pool.fold(0, (int total, MonsterCard card) => total + card.cardCount);
+    int roll = rng.nextInt(total);
+    for (final MonsterCard card in pool) {
+      roll -= card.cardCount;
+      if (roll < 0) return Monster.forCard(card.name, card.level);
+    }
+    return Monster.forCard(pool.last.name, pool.last.level);
+  }
+
   static Monster randomMonster(Random rng) {
     int roll = rng.nextInt(totalCards);
     for (final MonsterCard card in deck) {

@@ -165,6 +165,11 @@ class GameController extends Notifier<GameState?> {
   /// Planètes où un boss vient de s'éveiller (transitoire — notification).
   final List<PlanetType> bossAwakeningPlanets = <PlanetType>[];
 
+  /// Vrai au premier passage d'un joueur au niveau 4 (transitoire —
+  /// annonce « 👥 Des doubles monstres apparaissent ! »).
+  bool doubleMonstersPending = false;
+  bool doubleMonstersAnnounced = false;
+
   /// Nom de l'allié ennemi qui vient d'attaquer (transitoire — dialog).
   String? pendingEnemyAllyName;
 
@@ -463,6 +468,9 @@ class GameController extends Notifier<GameState?> {
       },
       bossUnlocked: current.players
           .any((Player p) => !p.eliminated && p.level >= 5),
+      // Doubles monstres (retours playtest 20/09) : débloqués au 1er N4.
+      doubleMonstersUnlocked: current.players
+          .any((Player p) => !p.eliminated && p.level >= 4),
     );
 
     // Planètes secondaires dévoilées par un portail découvert (Sprint 5).
@@ -761,6 +769,8 @@ class GameController extends Notifier<GameState?> {
       avoidPositions: _bossPositions(current, destination),
       bossUnlocked: current.players
           .any((Player p) => !p.eliminated && p.level >= 5),
+      doubleMonstersUnlocked: current.players
+          .any((Player p) => !p.eliminated && p.level >= 4),
     );
     secondary = populate.planet;
 
@@ -1374,6 +1384,8 @@ class GameController extends Notifier<GameState?> {
       },
       bossUnlocked: next.players
           .any((Player p) => !p.eliminated && p.level >= 5),
+      doubleMonstersUnlocked: next.players
+          .any((Player p) => !p.eliminated && p.level >= 4),
     );
     final Map<PlanetType, Planet> planetsNext =
         <PlanetType, Planet>{...next.planets, nextPlanet.type: populate.planet};
@@ -1429,6 +1441,12 @@ class GameController extends Notifier<GameState?> {
     if (newLevel == player.level) {
       return player.copyWith(xp: total);
     }
+    // Retours playtest 20/09 : au PREMIER joueur niveau 4, les « doubles
+    // monstres » apparaissent (annoncés une seule fois par partie).
+    if (newLevel >= 4 && !doubleMonstersAnnounced) {
+      doubleMonstersAnnounced = true;
+      doubleMonstersPending = true;
+    }
     log('⬆ ${player.name} atteint le niveau $newLevel !');
     return player.copyWith(
       xp: total,
@@ -1467,10 +1485,12 @@ class GameController extends Notifier<GameState?> {
       }
     }
 
-    // 4) La carte du monstre est retirée de la case (GDD §11).
+    // 4) La (les) carte(s) du monstre sont retirées de la case (GDD §11) —
+    // un double monstre vaincu retire ses DEUX cartes (retours playtest
+    // 20/09).
     final Tile tileUpdated = current.currentPlanet
         .tileAt(tile.x, tile.y)
-        .copyWith(clearMonster: true);
+        .copyWith(clearMonster: true, clearMonster2: true);
     final List<Tile> tiles = List<Tile>.of(current.currentPlanet.tiles);
     tiles[tile.y * current.currentPlanet.width + tile.x] = tileUpdated;
 
