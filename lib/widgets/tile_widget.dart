@@ -74,21 +74,40 @@ class TileWidget extends StatelessWidget {
               )
             else if (!tile.discovered)
               const UndiscoveredTileDeco()
-            else if (tile.monster != null)
+            else if (tile.monster != null) ...<Widget>[
               // Contenu de case : visible uniquement une fois la case
               // découverte (convention brouillard de guerre — Sprint 2).
               // Retours playtest 19/09 : image GÉNÉRIQUE (inconnu.png) —
               // impossible de savoir quel monstre attend sur la case ; le
               // vrai monstre n'est révélé que dans l'écran de combat.
+              // DOUBLE MONSTRE (20/09) : DEUX images côte à côte pour
+              // repérer les cases doubles sur le plateau.
               Center(
-                child: CardImage(
-                  category: 'monsters',
-                  id: 'inconnu',
-                  size: 34,
-                  fallbackIcon: Icons.pest_control,
-                  fallbackIconColor: AppColors.danger,
-                ),
+                child: tile.monster2 != null
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          for (final String id
+                              in const <String>['inconnu', 'inconnu'])
+                            CardImage(
+                              category: 'monsters',
+                              id: id,
+                              size: 24,
+                              fit: BoxFit.cover,
+                              fallbackIcon: Icons.pest_control,
+                              fallbackIconColor: AppColors.danger,
+                            ),
+                        ],
+                      )
+                    : CardImage(
+                        category: 'monsters',
+                        id: 'inconnu',
+                        size: 34,
+                        fallbackIcon: Icons.pest_control,
+                        fallbackIconColor: AppColors.danger,
+                      ),
               ),
+            ],
             if (child != null) Center(child: child),
           ],
         ),

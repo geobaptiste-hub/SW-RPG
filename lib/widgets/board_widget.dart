@@ -1,6 +1,4 @@
 
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -500,49 +498,58 @@ class _BoardWidgetState extends State<BoardWidget>
               // l'image du portail déposée (`assets/images/teleport/
               // portail.jpg|png`) s'affiche sur la case quand elle est
               // visible. Invisible avant la première utilisation.
-              if (widget.teleport != null &&
-                  widget.teleport!.planet == widget.planet.type &&
-                  widget.teleport!.visited &&
-                  (widget.planet
-                          .tileAtOrNull(widget.teleport!.position.x,
-                              widget.teleport!.position.y)
-                          ?.visible ??
-                      false))
-                _marker(
-                  widget.teleport!.position,
-                  Consumer(builder:
-                      (BuildContext context, WidgetRef ref, Widget? _) {
-                    final File? portalImage = ref
-                        .watch(imageServiceProvider)
-                        .resolveFile('teleport', 'portail');
-                    return Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.background,
-                        border: Border.all(
-                            color: AppColors.gold, width: 1.5),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black45, blurRadius: 4),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: portalImage == null
-                            ? const Icon(Icons.flash_on,
-                                size: 20, color: AppColors.gold)
-                            : Image.file(portalImage,
-                                fit: BoxFit.cover,
-                                errorBuilder: (BuildContext context,
-                                        Object error,
-                                        StackTrace? stackTrace) =>
-                                    const Icon(Icons.flash_on,
-                                        size: 20,
-                                        color: AppColors.gold)),
-                      ),
-                    );
-                  }),
-                ),
+              //
+              // TÉLÉPORTATION (retours playtest 20/09, v2) : une fois le
+              // couple ouvert, l'image du portail déposée
+              // (`assets/images/teleport/portail.jpg|png`) s'affiche sur
+              // LES DEUX cases (porte d'origine + case d'arrivée) quand
+              // elles sont visibles. Multiplateforme (providerFor).
+              for (final Position portalCase in <Position>[
+                if (widget.teleport != null) widget.teleport!.position,
+                if (widget.teleport != null && widget.teleport!.position2 != null)
+                  widget.teleport!.position2!,
+              ])
+                if (widget.teleport != null &&
+                    widget.teleport!.planet == widget.planet.type &&
+                    (widget.planet
+                            .tileAtOrNull(portalCase.x, portalCase.y)
+                            ?.visible ??
+                        false))
+                  _marker(
+                    portalCase,
+                    Consumer(builder:
+                        (BuildContext context, WidgetRef ref, Widget? _) {
+                      final ImageProvider? portalImage = ref
+                          .watch(imageServiceProvider)
+                          .providerFor('teleport', 'portail');
+                      return Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.background,
+                          border: Border.all(
+                              color: AppColors.gold, width: 1.5),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black45, blurRadius: 4),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: portalImage == null
+                              ? const Icon(Icons.flash_on,
+                                  size: 20, color: AppColors.gold)
+                              : Image(image: portalImage,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (BuildContext context,
+                                          Object error,
+                                          StackTrace? stackTrace) =>
+                                      const Icon(Icons.flash_on,
+                                          size: 20,
+                                          color: AppColors.gold)),
+                        ),
+                      );
+                    }),
+                  ),
               // Boss (Sprint 5) : médaillon rond avec l'image du boss
               // si déposée (`assets/images/bosses/` — Sprint 6), sinon
               // icône par type. Caché hors du rayon de vue.
