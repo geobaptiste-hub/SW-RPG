@@ -6,3 +6,7 @@ PNG ou JPG acceptés.
         (invisible avant). Format carré conseillé (~256x256).
 
 Sans image : médaillon doré avec un éclair (aucune erreur).
+
+V2 BIDIRECTIONNELLE : les DEUX cases du couple (la porte d'origine et la
+case d'arrivée) affichent l'image du portail une fois la première
+téléportation effectuée ; marcher sur l'une renvoie vers l'autre.

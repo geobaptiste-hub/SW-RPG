@@ -69,6 +69,10 @@ class GameState {
   /// 20/09) ; `null` pour les parties créées avant cette fonctionnalité.
   final TeleportPortal? teleport;
 
+  /// Doubles monstres débloqués (au premier joueur niveau 4) — persisté
+  /// pour survivre aux rechargements de page (web).
+  final bool doubleMonstersUnlocked;
+
   final GameStatus status;
   final DateTime? savedAt;
 
@@ -91,6 +95,7 @@ class GameState {
     required this.portals,
     this.cantina,
     this.teleport,
+    this.doubleMonstersUnlocked = false,
     required this.status,
     this.savedAt,
   });
@@ -125,6 +130,7 @@ class GameState {
     List<Portal>? portals,
     CantinaZone? cantina,
     TeleportPortal? teleport,
+    bool? doubleMonstersUnlocked,
     GameStatus? status,
     DateTime? savedAt,
   }) {
@@ -149,6 +155,8 @@ class GameState {
       portals: portals ?? this.portals,
       cantina: cantina ?? this.cantina,
       teleport: teleport ?? this.teleport,
+      doubleMonstersUnlocked:
+          doubleMonstersUnlocked ?? this.doubleMonstersUnlocked,
       status: status ?? this.status,
       savedAt: savedAt ?? this.savedAt,
     );
@@ -179,6 +187,7 @@ class GameState {
         'portals': portals.map((Portal portal) => portal.toJson()).toList(),
         if (cantina != null) 'cantina': cantina!.toJson(),
         if (teleport != null) 'teleport': teleport!.toJson(),
+        'doubleMonstersUnlocked': doubleMonstersUnlocked,
         'status': enumToName(status),
         'savedAt': savedAt?.toIso8601String(),
       };
@@ -220,6 +229,8 @@ class GameState {
       teleport: json['teleport'] == null
           ? null
           : TeleportPortal.fromJson(json['teleport']),
+      doubleMonstersUnlocked:
+          json['doubleMonstersUnlocked'] as bool? ?? false,
       status: enumFromName(
           GameStatus.values, json['status'], GameStatus.inProgress),
       savedAt: json['savedAt'] == null

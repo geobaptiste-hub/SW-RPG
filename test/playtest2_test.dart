@@ -1272,17 +1272,32 @@ void main() {
       final GameState after = container.read(gameControllerProvider)!;
       expect(after.teleport!.visited, isTrue,
           reason: 'le portail reste ouvert après la première utilisation');
-      expect(after.activePlayer.position, isNot(door),
-          reason: 'le joueur est projeté ailleurs');
+      expect(after.teleport!.position2, isNotNull,
+          reason: 'la seconde case fixe du couple est créée');
+      expect(after.activePlayer.position, after.teleport!.position2,
+          reason: 'le joueur arrive sur la seconde case fixe');
       expect(
         after.activePlayer.position.chebyshevDistanceTo(door),
         greaterThanOrEqualTo(12),
         reason: 'la destination est ÉLOIGNÉE (autre côté de la carte)',
       );
-      expect(after.activePlayer.position,
-          isNot(const Position(0, 0)),
-          reason: 'jamais sur un départ');
       expect(controller.doubleMonstersPending, isFalse);
+
+      // V2 BIDIRECTIONNEL : repartir de la seconde case renvoie à la porte.
+      final Position second = after.teleport!.position2!;
+      final Position back = mapService
+          .neighborPositions(second, planet)
+          .firstWhere((Position p) => planet.isWalkableAt(p.x, p.y));
+      controller.state = after.copyWith(
+        players: <Player>[after.activePlayer.copyWith(position: back)],
+        movementPointsRemaining: 2,
+      );
+      final MoveResult result2 = controller.moveActivePlayerTo(second.x, second.y);
+      expect(result2, MoveResult.teleport,
+          reason: 'la seconde case re-téléporte vers la porte');
+      final GameState back2 = container.read(gameControllerProvider)!;
+      expect(back2.activePlayer.position, door,
+          reason: 'aller-retour : retour sur la porte d’origine');
     });
 
     test('avant la première utilisation, le portail reste invisible '
@@ -1358,7 +1373,8 @@ void main() {
       final GameState after = container.read(gameControllerProvider)!;
       expect(after.activePlayer.level, greaterThanOrEqualTo(4),
           reason: '1040 XP fait passer le joueur au niveau 4 (voire 5)');
-      expect(controller.doubleMonstersAnnounced, isTrue);
+      expect(after.doubleMonstersUnlocked, isTrue,
+          reason: 'le débloquage est persisté dans la sauvegarde');
       expect(controller.doubleMonstersPending, isTrue,
           reason: 'annonce « 👥 Des doubles monstres apparaissent ! »');
       final int doubles = after.currentPlanet.tiles
