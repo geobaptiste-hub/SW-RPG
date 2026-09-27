@@ -523,7 +523,15 @@ class CombatController extends Notifier<CombatSession?> {
     // puis le défenseur riposte sans pouvoir critiquer. Fix playtest : la
     // riposte du défenseur n'était pas appliquée, l'attaquant ne subissait
     // jamais de dégâts. Le JvJ reste létal (pas de température de niveau).
-    final int hp = session.defenderHpRemaining - damage;
+    // FIX 20/09 : les tanks « dégâts divisés » s'appliquent en JvJ — le
+    // DÉFENSEUR divise les dégâts de l'attaquant, l'ATTAQUANT divise la
+    // riposte (comme face aux monstres).
+    final Player defender = game.players[session.defenderIndex!];
+    int damageToDefender = damage;
+    if (defender.hasDamageDivider) {
+      damageToDefender = (damageToDefender / 2).ceil();
+    }
+    final int hp = session.defenderHpRemaining - damageToDefender;
     final bool defenderDown = hp <= 0;
     final bool defenderSaved =
         defenderDown && _game.consumePreventDeath(session.defenderIndex!);
@@ -545,6 +553,9 @@ class CombatController extends Notifier<CombatSession?> {
     bool deathPrevented = defenderSaved;
     if (!eliminated) {
       counter = session.defenderAttackTotal;
+      if (game.activePlayer.hasDamageDivider) {
+        counter = (counter / 2).ceil();
+      }
       attackerHp = attackerHp - counter;
       if (attackerHp <= 0) {
         attackerHp = 0;

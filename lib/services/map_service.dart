@@ -5,6 +5,7 @@ import '../core/constants/planet_constants.dart' show PlanetConstants;
 import '../core/constants/enums.dart' show GamePhase;
 import '../core/constants/game_constants.dart';
 import '../core/constants/card_constants.dart';
+import '../models/ally.dart';
 import '../core/constants/monster_constants.dart';
 import '../core/constants/planet_constants.dart';
 import '../core/utils/direction.dart';
@@ -409,6 +410,7 @@ class MapService {
     required bool bossUnlocked,
     Set<Position> avoidPositions = const <Position>{},
     bool doubleMonstersUnlocked = false,
+    Player? allyBiasPlayer,
   }) {
     final Set<Position> starts = BoardConstants.startPositions.toSet();
     final List<double> probabilities = switch (phase) {
@@ -471,8 +473,26 @@ class MapService {
                 monster: MonsterConstants.randomMonster(rng)));
           }
         case 'allie':
-          tiles.add(newTile.copyWith(
-              ally: CardConstants.randomAllyCard(rng)));
+          // Retours playtest 20/09 : le ratio allié AMI vs allié ENNEMI
+          // (faction opposée — carte qui attaque) dépend du niveau du
+          // joueur actif : N1 → 70 % ami, N2 → 60 %, N3+ → tirage naturel.
+          Ally drawn = CardConstants.randomAllyCard(rng);
+          if (allyBiasPlayer != null && allyBiasPlayer.level <= 2) {
+            final Faction joueurFaction = allyBiasPlayer.faction;
+            final bool friendly = drawn.faction == joueurFaction ||
+                drawn.faction == joueurFaction.alliedFaction;
+            final double seuil =
+                allyBiasPlayer.level == 1 ? 0.70 : 0.60;
+            final double roll2 = rng.nextDouble();
+            if (friendly && roll2 >= seuil) {
+              drawn = CardConstants.randomEnemyAllyCard(
+                  rng, joueurFaction);
+            } else if (!friendly && roll2 < seuil) {
+              drawn = CardConstants.randomFriendlyAllyCard(
+                  rng, joueurFaction);
+            }
+          }
+          tiles.add(newTile.copyWith(ally: drawn));
         case 'objet':
           if (rng.nextBool()) {
             tiles.add(newTile.copyWith(

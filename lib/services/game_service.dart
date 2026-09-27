@@ -286,6 +286,7 @@ class GameController extends Notifier<GameState?> {
       occupied: occupied,
       existingPortals: const [],
       bossUnlocked: false,
+      allyBiasPlayer: players[firstPlayerIndex],
       avoidPositions: <Position>{
         ..._bossPositions(state, planet.type),
         // Aucun contenu tiré sur la porte de la cantina ni de téléport.
@@ -487,6 +488,8 @@ class GameController extends Notifier<GameState?> {
       // Doubles monstres (retours playtest 20/09) : débloqués au 1er N4.
       doubleMonstersUnlocked: current.players
           .any((Player p) => !p.eliminated && p.level >= 4),
+      // Ratio allié ami/ennemi selon le niveau du joueur actif (20/09).
+      allyBiasPlayer: movingBefore,
     );
 
     // Planètes secondaires dévoilées par un portail découvert (Sprint 5).
@@ -870,6 +873,7 @@ class GameController extends Notifier<GameState?> {
           .any((Player p) => !p.eliminated && p.level >= 5),
       doubleMonstersUnlocked: current.players
           .any((Player p) => !p.eliminated && p.level >= 4),
+      allyBiasPlayer: players[index],
     );
     secondary = populate.planet;
 
@@ -1499,6 +1503,7 @@ class GameController extends Notifier<GameState?> {
           .any((Player p) => !p.eliminated && p.level >= 5),
       doubleMonstersUnlocked: next.players
           .any((Player p) => !p.eliminated && p.level >= 4),
+      allyBiasPlayer: nextPlayer,
     );
     final Map<PlanetType, Planet> planetsNext =
         <PlanetType, Planet>{...next.planets, nextPlanet.type: populate.planet};

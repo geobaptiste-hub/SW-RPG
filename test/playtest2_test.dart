@@ -439,6 +439,52 @@ void main() {
           reason: 'l attaquant sort indemne');
     });
 
+    test('FIX 20/09 : JvJ — le tank « dégâts divisés » du DÉFENSEUR divise '
+        'les dégâts subis', () {
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final Planet planet =
+          mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
+      final Player attacker = _player(level: 6, hp: 3000, maxHp: 3000);
+      final Position defenderTile = mapService
+          .validMoveTargets(
+              planet: planet, players: <Player>[attacker],
+              activePlayerIndex: 0)
+          .first;
+      // Défenseur avec le tank « dégâts divisés » de l'équipe Empire.
+      final Player defender = _opponent(position: defenderTile, hp: 2000)
+          .copyWith(allies: <Ally>[
+        Ally.tank(
+          name: 'Chewbacca',
+          faction: Faction.rebel,
+          rarity: Rarity.rare,
+          cost: 3,
+          dividesDamage: true,
+        ),
+      ]);
+      final GameController controller =
+          container.read(gameControllerProvider.notifier);
+      controller.state =
+          _duelState(planet, <Player>[attacker, defender]);
+
+      controller.moveActivePlayerTo(defenderTile.x, defenderTile.y);
+      final CombatController combat =
+          container.read(combatControllerProvider.notifier);
+      combat.startPlayerCombat(1);
+      combat.attack();
+
+      final CombatSession session = container.read(combatControllerProvider)!;
+      expect(session.lastDamage, greaterThan(0));
+      final GameState after = container.read(gameControllerProvider)!;
+      final int loss = 2000 - after.players[1].hp;
+      expect(loss, (session.lastDamage / 2).ceil(),
+          reason: 'le tank du défenseur divise les dégâts reçus '
+              '(plafond arrondi au supérieur)');
+      expect(after.players[0].hp, 3000 - session.defenderAttackTotal,
+          reason: 'l attaquant ne subit que la riposte du défenseur '
+              '(sans division : son tank ne joue pas ici)');
+    });
+
     test('attaquant éliminé par la riposte : +500 XP au défenseur', () {
       final ProviderContainer container = _container(5);
       addTearDown(container.dispose);
@@ -1815,6 +1861,76 @@ void main() {
             reason: 'mêmes noms de fichiers que les images '
                 '(assets/images/planets/) — plus simple à déposer');
       }
+    });
+  });
+
+  group('Ratio allié ami/ennemi selon le niveau (fix 20/09)', () {
+    int countOf(List<Tile> tiles, bool Function(Faction f) test) {
+      int friendly = 0;
+      int enemy = 0;
+      for (final Tile t in tiles) {
+        final Ally? a = t.ally;
+        if (a == null) continue;
+        if (test(a.faction)) {
+          friendly++;
+        } else {
+          enemy++;
+        }
+      }
+      return friendly - enemy; // positif → plus d'alliés amis
+    }
+
+    test('N1 : 70 % des alliés tirés sont AMIS (contre ennemis)', () {
+      final Planet planet =
+          mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
+      final Player player = _player(faction: Faction.rebel, level: 1)
+          .copyWith(hp: 2000, maxHp: 2000);
+      final Planet revealed = mapService.revealFogAround(
+        planet,
+        const Position(10, 10),
+        radius: 30,
+      );
+      final populate = mapService.populateNewlyDiscoveredTiles(
+        before: planet,
+        after: revealed,
+        phase: GamePhase.fin,
+        rng: Random(11),
+        occupied: const <Position>{},
+        existingPortals: const [],
+        bossUnlocked: false,
+        allyBiasPlayer: player,
+      );
+      final int balance = countOf(populate.planet.tiles,
+          (Faction f) => f == Faction.rebel || f == Faction.jedi);
+      expect(balance, greaterThan(0),
+          reason: 'au N1, les alliés AMIS dominent largement les ennemis');
+    });
+
+    test('N6 : tirage naturel (pas de biais forcé)', () {
+      final Planet planet =
+          mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
+      final Player player = _player(faction: Faction.rebel, level: 6)
+          .copyWith(hp: 2000, maxHp: 2000);
+      final Planet revealed = mapService.revealFogAround(
+        planet,
+        const Position(10, 10),
+        radius: 30,
+      );
+      final populate = mapService.populateNewlyDiscoveredTiles(
+        before: planet,
+        after: revealed,
+        phase: GamePhase.fin,
+        rng: Random(11),
+        occupied: const <Position>{},
+        existingPortals: const [],
+        bossUnlocked: false,
+        allyBiasPlayer: player,
+      );
+      final int allies = populate.planet.tiles
+          .where((Tile t) => t.ally != null)
+          .length;
+      expect(allies, greaterThan(0));
+      // Pas d'assertion d'équilibre : le tirage naturel est conservé.
     });
   });
 

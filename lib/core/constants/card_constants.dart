@@ -1005,4 +1005,37 @@ class CardConstants {
   /// Tire une tenue uniformément parmi les 30 cartes (communes × 2).
   static Armor randomArmorCard(Random rng) =>
       armors[_pick(rng, armors.map(armorCardCount).toList(growable: false))];
+
+  /// Retours playtest 20/09 : ratio allié AMI vs ENNEMI selon le niveau du
+  /// joueur actif (N1 : 70 % ami, N2 : 60 %, N3+ : tirage naturel). La
+  /// faction est AMIE si elle est celle du joueur ou sa faction alliée.
+  static double allyFriendlyShareForLevel(int level) {
+    if (level <= 1) return 0.70;
+    if (level == 2) return 0.60;
+    return 0.50;
+  }
+
+  static List<Ally> _alliesOfFaction(Faction faction) =>
+      recruitDeck.where((Ally a) => a.faction == faction).toList();
+
+  /// Tire un allié AMI (faction du joueur ou faction alliée).
+  static Ally randomFriendlyAllyCard(Random rng, Faction playerFaction) {
+    final Faction allyFaction =
+        playerFaction.alliedFaction ?? playerFaction;
+    final List<Ally> pool = <Ally>[
+      ..._alliesOfFaction(playerFaction),
+      ..._alliesOfFaction(allyFaction),
+    ];
+    return pool[rng.nextInt(pool.length)];
+  }
+
+  /// Tire un allié ENNEMI (une des deux factions opposées au joueur).
+  static Ally randomEnemyAllyCard(Random rng, Faction playerFaction) {
+    final List<Ally> pool = recruitDeck
+        .where((Ally a) =>
+            a.faction != playerFaction &&
+            a.faction != playerFaction.alliedFaction)
+        .toList();
+    return pool[rng.nextInt(pool.length)];
+  }
 }
