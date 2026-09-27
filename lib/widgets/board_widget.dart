@@ -494,22 +494,24 @@ class _BoardWidgetState extends State<BoardWidget>
                         }),
                       ),
                     ),
-              // TÉLÉPORTATION (retours playtest 20/09) : une fois utilisée,
-              // l'image du portail déposée (`assets/images/teleport/
-              // portail.jpg|png`) s'affiche sur la case quand elle est
-              // visible. Invisible avant la première utilisation.
-              //
-              // TÉLÉPORTATION (retours playtest 20/09, v2) : une fois le
-              // couple ouvert, l'image du portail déposée
-              // (`assets/images/teleport/portail.jpg|png`) s'affiche sur
-              // LES DEUX cases (porte d'origine + case d'arrivée) quand
-              // elles sont visibles. Multiplateforme (providerFor).
+              // TÉLÉPORTATION (retours playtest 20/09, v2
+              // bidirectionnelle) : une fois le couple ouvert, l'image du
+              // portail déposée (`assets/images/teleport/portail.jpg|png`)
+              // s'affiche sur LES DEUX cases (porte d'origine + case
+              // d'arrivée) quand elles sont visibles. Multiplateforme
+              // (providerFor). Avant la première utilisation : la case de
+              // téléportation est INVISIBLE (aucun logo — il faut marcher
+              // dessus pour la découvrir).
               for (final Position portalCase in <Position>[
-                if (widget.teleport != null) widget.teleport!.position,
-                if (widget.teleport != null && widget.teleport!.position2 != null)
+                if (widget.teleport != null && widget.teleport!.visited)
+                  widget.teleport!.position,
+                if (widget.teleport != null &&
+                    widget.teleport!.visited &&
+                    widget.teleport!.position2 != null)
                   widget.teleport!.position2!,
               ])
                 if (widget.teleport != null &&
+                    widget.teleport!.visited &&
                     widget.teleport!.planet == widget.planet.type &&
                     (widget.planet
                             .tileAtOrNull(portalCase.x, portalCase.y)

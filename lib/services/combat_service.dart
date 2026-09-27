@@ -243,12 +243,16 @@ class CombatController extends Notifier<CombatSession?> {
     if (game == null) return;
     final Monster? monster = game.currentPlanet.tileAt(tile.x, tile.y).monster;
     if (monster == null) return;
+    // Double monstre (retours playtest 20/09) : la seconde carte de la
+    // tuile rejoint le combat — PV et ATK additionnés dans la session.
+    final Monster? monster2 = game.currentPlanet.tileAt(tile.x, tile.y).monster2;
     final Player active = game.activePlayer;
     state = CombatSession(
       kind: CombatKind.monster,
       targetTile: tile,
       monster: monster,
-      monsterHpRemaining: monster.hp,
+      monster2: monster2,
+      monsterHpRemaining: monster.hp + (monster2?.hp ?? 0),
       playerAttackTotal: active.totalAttack,
       playerHp: active.hp,
       playerMaxHp: active.totalMaxHp,

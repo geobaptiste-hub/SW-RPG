@@ -1228,6 +1228,49 @@ void main() {
       }
     });
 
+    test('Entrer sur un double : combat contre DEUX monstres (pool PV)', () {
+      final Planet planet =
+          mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
+      final Monster m1 = Monster.forCard('Gungans', 1);
+      final Monster m2 = Monster.forCard('Droïde de combat B1', 2);
+      final Player player = _player(faction: Faction.jedi, level: 4)
+          .copyWith(hp: 2000, maxHp: 2000);
+      final Position target =
+          mapService.validMoveTargets(planet: planet, players: <Player>[player], activePlayerIndex: 0).first;
+      final List<Tile> tiles = List<Tile>.of(planet.tiles);
+      tiles[target.y * planet.width + target.x] = tiles[target.y * planet.width + target.x]
+          .copyWith(monster: m1, monster2: m2);
+
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final GameController controller =
+          container.read(gameControllerProvider.notifier);
+      controller.state = _duelState(
+          planet.withTiles(tiles), <Player>[player], movement: 1);
+
+      final MoveResult result =
+          controller.moveActivePlayerTo(target.x, target.y);
+      expect(result, MoveResult.monsterEncounter);
+
+      final CombatController combat =
+          container.read(combatControllerProvider.notifier);
+      combat.startMonsterCombat(target);
+      final CombatSession session = container.read(combatControllerProvider)!;
+      expect(session.monster, m1);
+      expect(session.monster2, m2);
+      expect(session.monsterHpRemaining, m1.hp + m2.hp,
+          reason: 'pool de PV additionné (200 + 300 = 500)');
+      expect(session.totalMonsterAttack, m1.attack + m2.attack,
+          reason: 'riposte basée sur l’ATK additionnée (5 + 10 = 15)');
+
+      combat.attack();
+      final CombatSession afterAttack =
+          container.read(combatControllerProvider)!;
+      expect(afterAttack.monsterHpRemaining,
+          lessThan(session.monsterHpRemaining),
+          reason: 'les dégâts entamment le pool combiné');
+    });
+
     test('Doubles monstres : XP = (somme des XP) x 2,5', () {
       // N1 (10 XP) + N2 (20 XP) → 75 XP (et non 30).
       final Monster m1 = Monster.forCard('Gungans', 1);

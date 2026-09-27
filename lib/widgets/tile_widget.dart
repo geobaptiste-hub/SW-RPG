@@ -74,40 +74,23 @@ class TileWidget extends StatelessWidget {
               )
             else if (!tile.discovered)
               const UndiscoveredTileDeco()
-            else if (tile.monster != null) ...<Widget>[
+            else if (tile.monster != null)
               // Contenu de case : visible uniquement une fois la case
               // découverte (convention brouillard de guerre — Sprint 2).
               // Retours playtest 19/09 : image GÉNÉRIQUE (inconnu.png) —
-              // impossible de savoir quel monstre attend sur la case ; le
-              // vrai monstre n'est révélé que dans l'écran de combat.
-              // DOUBLE MONSTRE (20/09) : DEUX images côte à côte pour
-              // repérer les cases doubles sur le plateau.
+              // impossible de savoir quel monstre attend sur la case.
+              // DOUBLE MONSTRE (20/09) : même affichage qu'une case
+              // simple — la présence du second monstre est LA SURPRISE
+              // à l'entrée en combat (2 cartes dans l'écran de combat).
               Center(
-                child: tile.monster2 != null
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          for (final String id
-                              in const <String>['inconnu', 'inconnu'])
-                            CardImage(
-                              category: 'monsters',
-                              id: id,
-                              size: 24,
-                              fit: BoxFit.cover,
-                              fallbackIcon: Icons.pest_control,
-                              fallbackIconColor: AppColors.danger,
-                            ),
-                        ],
-                      )
-                    : CardImage(
-                        category: 'monsters',
-                        id: 'inconnu',
-                        size: 34,
-                        fallbackIcon: Icons.pest_control,
-                        fallbackIconColor: AppColors.danger,
-                      ),
+                child: CardImage(
+                  category: 'monsters',
+                  id: 'inconnu',
+                  size: 34,
+                  fallbackIcon: Icons.pest_control,
+                  fallbackIconColor: AppColors.danger,
+                ),
               ),
-            ],
             if (child != null) Center(child: child),
           ],
         ),
