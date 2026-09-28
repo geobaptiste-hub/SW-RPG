@@ -280,9 +280,10 @@ class GameController extends Notifier<GameState?> {
       teleport: teleportDoor == null
           ? null
           : TeleportPortal(planet: config.planetType, position: teleportDoor),
-      patapuche: patapucheDoor == null
-          ? null
-          : Patapuche(planet: config.planetType, position: patapucheDoor),
+      // PATAPUCHE n'existe PAS encore : elle apparaît au premier niveau 2
+      // (_maybeSpawnPatapuche — fix 28/09 : créée dès le départ, le spawn
+      // n'avait jamais lieu et l'annonce « Patapuche apparaît » ne
+      // s'affichait jamais). Seule sa CASE est réservée dès la création.
       status: GameStatus.inProgress,
     );
 
@@ -303,10 +304,11 @@ class GameController extends Notifier<GameState?> {
       avoidPositions: <Position>{
         ..._bossPositions(state, planet.type),
         // Aucun contenu tiré sur la porte de la cantina, de téléport, ni
-        // sur la case de Patapuche.
+        // sur la case réservée à Patapuche (l'ancre seedée, même si elle
+        // n'apparaîtra qu'au premier niveau 2).
         if (state.cantina != null) state.cantina!.anchor,
         if (state.teleport != null) state.teleport!.position,
-        if (state.patapuche != null) state.patapuche!.position,
+        if (patapucheDoor != null) patapucheDoor,
       },
     );
     final Map<PlanetType, Planet> planets = <PlanetType, Planet>{
@@ -477,6 +479,10 @@ class GameController extends Notifier<GameState?> {
 
     final Planet before =
         current.planets[movingPlanet] ?? current.currentPlanet;
+    // Aucun contenu tiré sur la case de Patapuche (sa position, ou
+    // l'ancre seedée en attendant le premier niveau 2).
+    final Position? patapucheSpot =
+        _patapucheReservedPosition(current, movingPlanet);
     final populate = _mapService.populateNewlyDiscoveredTiles(
       before: before,
       after: _mapService.revealFogAround(before, target),
@@ -497,9 +503,7 @@ class GameController extends Notifier<GameState?> {
           if (current.teleport!.position2 != null)
             current.teleport!.position2!,
         ],
-        // Aucun contenu tiré sur la case de Patapuche.
-        if (current.patapuche?.planet == movingPlanet)
-          current.patapuche!.position,
+        if (patapucheSpot != null) patapucheSpot,
       },
       bossUnlocked: current.players
           .any((Player p) => !p.eliminated && p.level >= 5),
@@ -1021,9 +1025,7 @@ class GameController extends Notifier<GameState?> {
         (state!.teleport?.planet == planet.type && state!.teleport!.position2 != null)
             ? state!.teleport!.position2
             : null;
-    final Position? patapuchePos = (state!.patapuche?.planet == planet.type)
-        ? state!.patapuche!.position
-        : null;
+    final Position? patapuchePos = _patapucheReservedPosition(state!, planet.type);
     // Un SOIN redéposé ne doit pas être voisin d'un autre soin (retours
     // playtest 20/09 : jamais deux soins sur des cases voisines).
     bool healSiteNearby(Position p) {
@@ -1530,6 +1532,10 @@ class GameController extends Notifier<GameState?> {
     final Player nextPlayer = next.players[nextIndex];
     final Planet nextPlanet =
         next.planets[nextPlayer.planet] ?? next.currentPlanet;
+    // Case à réserver pour Patapuche sur la planète peuplée (sa position,
+    // ou l'ancre seedée en attendant le premier niveau 2).
+    final Position? patapucheSpot =
+        _patapucheReservedPosition(next, nextPlanet.type);
     final populate = _mapService.populateNewlyDiscoveredTiles(
       before: nextPlanet,
       after: _mapService.revealFogAround(
@@ -1549,8 +1555,7 @@ class GameController extends Notifier<GameState?> {
           if (next.teleport!.position2 != null)
             next.teleport!.position2!,
         ],
-        if (next.patapuche?.planet == nextPlanet.type)
-          next.patapuche!.position,
+        if (patapucheSpot != null) patapucheSpot,
       },
       bossUnlocked: next.players
           .any((Player p) => !p.eliminated && p.level >= 5),
@@ -1926,9 +1931,7 @@ class GameController extends Notifier<GameState?> {
         teleportDoor: next.teleport?.planet == mainType
             ? next.teleport!.position
             : null,
-        patapuchePosition: next.patapuche?.planet == mainType
-            ? next.patapuche!.position
-            : null,
+        patapuchePosition: _patapucheReservedPosition(next, mainType),
       );
       if (spot == null) break;
 
@@ -2050,7 +2053,7 @@ class GameController extends Notifier<GameState?> {
 
   /// PREMIER joueur niveau 2 (retours playtest 20/09) : PATAPUCHE
   /// apparaît sur la planète principale (case libre au hasard, hors
-  /// départs/contenus/portes) + annonce au plateau.
+  /// départs/contenus/portails) + annonce au plateau.
   void _maybeSpawnPatapuche() {
     final GameState? s = state;
     if (s == null || s.status != GameStatus.inProgress) return;
@@ -2066,6 +2069,19 @@ class GameController extends Notifier<GameState?> {
     );
     patapuchePending = true;
     log('🐾 Patapuche apparaît sur la planète !');
+  }
+
+  /// Case à réserver pour PATAPUCHE sur [planet] : sa position si elle est
+  /// déjà apparue, sinon l'ancre seedée qui attend le premier niveau 2.
+  /// Aucun contenu ni portail ne doit s'y poser, pour que sa case soit
+  /// libre le jour de son apparition. Hors de la planète de départ → null.
+  Position? _patapucheReservedPosition(GameState s, PlanetType planet) {
+    final Patapuche? patapuche = s.patapuche;
+    if (patapuche != null) {
+      return patapuche.planet == planet ? patapuche.position : null;
+    }
+    if (!PlanetConstants.startPlanets.contains(planet)) return null;
+    return _mapService.patapucheAnchorFor(s.seed);
   }
 
   /// Déplacement de Patapuche à CHAQUE fin de tour : une case au hasard

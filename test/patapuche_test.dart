@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:star_wars_rpg/core/constants/board_constants.dart';
+import 'package:star_wars_rpg/core/constants/character_constants.dart';
 import 'package:star_wars_rpg/core/constants/enums.dart';
 import 'package:star_wars_rpg/core/constants/game_constants.dart';
 import 'package:star_wars_rpg/models/game_state.dart';
@@ -175,6 +176,104 @@ void main() {
           reason: 'une seule Patapuche par partie');
       expect(after.patapuche!.position, isNot(const Position(6, 6)),
           reason: 'elle se déplace à chaque fin de tour');
+    });
+  });
+
+  group('Apparition au premier N2 — depuis une vraie partie (fix 28/09)', () {
+    test('createNewGame ne crée PAS Patapuche : elle attend le premier N2',
+        () async {
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final GameController controller =
+          container.read(gameControllerProvider.notifier);
+      final GameState created = await controller.createNewGame(
+          NewGameConfig(
+        mode: GameMode.chacunPourSoi,
+        playerCount: 2,
+        teamSize: 0,
+        planetType: PlanetType.hoth,
+        characters: <CharacterDefinition>[
+          CharacterConstants.characters[0],
+          CharacterConstants.characters[2],
+        ],
+      ));
+
+      // Fix 28/09 : Patapuche était créée dès le départ → _maybeSpawn
+      // partait aussitôt (patapuche != null) et l'annonce « Patapuche
+      // apparaît » ne s'affichait JAMAIS.
+      expect(created.patapuche, isNull,
+          reason: 'Patapuche n’existe pas avant le premier niveau 2');
+      expect(controller.patapuchePending, isFalse);
+      // Sa case est malgré tout réservée : l'ancre seedée est jouable et
+      // sans contenu, prête à l'accueillir.
+      final Position? anchor = mapService.patapucheAnchorFor(created.seed);
+      expect(anchor, isNotNull);
+      final Tile tile =
+          created.currentPlanet.tileAt(anchor!.x, anchor.y);
+      expect(tile.walkable, isTrue, reason: 'l’ancre est protégée du blocage');
+      expect(tile.monster, isNull);
+      expect(tile.ally, isNull);
+      expect(tile.weapon, isNull);
+      expect(tile.armor, isNull);
+    });
+
+    test('victoire de monstre qui fait passer N2 : spawn + annonce au plateau',
+        () async {
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final GameController controller =
+          container.read(gameControllerProvider.notifier);
+      final GameState created = await controller.createNewGame(
+          NewGameConfig(
+        mode: GameMode.chacunPourSoi,
+        playerCount: 2,
+        teamSize: 0,
+        planetType: PlanetType.hoth,
+        characters: <CharacterDefinition>[
+          CharacterConstants.characters[0],
+          CharacterConstants.characters[2],
+        ],
+      ));
+
+      // Le joueur actif est à 5 XP du palier N2 (200 XP).
+      final List<Player> players = List<Player>.of(created.players);
+      players[created.currentPlayerIndex] =
+          created.activePlayer.copyWith(xp: 195);
+      controller.state = created.copyWith(players: players);
+
+      // Victoire sur un monstre N1 (+10 XP) → 205 XP → niveau 2.
+      controller.applyMonsterVictory(
+        tile: created.activePlayer.position,
+        xp: 10,
+        playerHp: created.activePlayer.hp,
+      );
+
+      final GameState after = container.read(gameControllerProvider)!;
+      expect(after.players[after.currentPlayerIndex].level, 2,
+          reason: 'le combat a bien fait passer le joueur niveau 2');
+      expect(after.patapuche, isNotNull,
+          reason: 'Patapuche apparaît au premier niveau 2');
+      expect(after.patapuche!.planet, PlanetType.hoth);
+      expect(after.patapuche!.position,
+          mapService.patapucheAnchorFor(created.seed),
+          reason: 'elle apparaît sur l’ancre seedée');
+      expect(controller.patapuchePending, isTrue,
+          reason: 'l’annonce « Patapuche apparaît » est déclenchée '
+              '(dialog au retour plateau)');
+    });
+
+    test('l’ancre est protégée du blocage pour toute graine (constante '
+        'partagée génération/accesseur)', () {
+      for (final int seed in <int>[1, 7, 42, 123, 999, 2026, 0x7FFFFFFF]) {
+        final Planet planet =
+            mapService.generateStartPlanet(PlanetType.hoth, seed: seed);
+        final Position? anchor = mapService.patapucheAnchorFor(seed);
+        expect(anchor, isNotNull, reason: 'seed $seed');
+        final Tile tile = planet.tileAt(anchor!.x, anchor.y);
+        expect(tile.walkable, isTrue,
+            reason: 'seed $seed : l’ancre renvoyée doit être la case '
+                'protégée pendant la génération');
+      }
     });
   });
 

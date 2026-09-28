@@ -18,6 +18,13 @@ import '../models/tile.dart';
 /// Service responsable du plateau : génération procédurale, brouillard de
 /// guerre, déplacement, portails et boss mobiles (Architecture v1.0).
 class MapService {
+  /// Sel du RNG dédié à l'ancre de PATAPUCHE : la génération du plateau
+  /// (protection du blocage) et `patapucheAnchorFor` DOIVENT tirer la même
+  /// position — une seule constante pour éviter toute divergence (fix
+  /// 28/09 : 0x9A7B10 ici vs 0x9A7B1E dans l'accesseur, l'ancre renvoyée
+  /// n'était pas la case protégée).
+  static const int _patapucheAnchorSalt = 0x9A7B10;
+
   /// Génère la planète de départ : grille 15x15, 168 cases jouables,
   /// 57 cases bloquées, toutes les zones jouables connectées
   /// (GDD §3, CDC §5).
@@ -37,8 +44,8 @@ class MapService {
         _pickTeleportAnchor(Random(seed + 0x7E1E10), cantinaDoor);
     // La CASE DE PATAPUCHE (retours playtest 20/09) : troisième case
     // cachée, protégée du blocage, jamais sur les deux autres portes.
-    final Position? patapucheAnchor =
-        _pickPatapucheAnchor(Random(seed + 0x9A7B10), cantinaDoor, teleportDoor);
+    final Position? patapucheAnchor = _pickPatapucheAnchor(
+        Random(seed + _patapucheAnchorSalt), cantinaDoor, teleportDoor);
     // Nombre d'essais de sécurité : l'algorithme garantit la connectivité à
     // chaque pose de bloc, il aboutit statistiquement toujours.
     for (int attempt = 0; attempt < 200; attempt++) {
@@ -64,10 +71,12 @@ class MapService {
       _pickTeleportAnchor(Random(seed + 0x7E1E10), cantinaAnchorFor(seed));
 
   /// Position de PATAPUCHE pour une graine : déterministe, hors départs,
-  /// jamais sur les portes cantina/téléport.
-  Position? patapucheAnchorFor(int seed) =>
-      _pickPatapucheAnchor(Random(seed + 0x9A7B1E), cantinaAnchorFor(seed),
-          teleportAnchorFor(seed));
+  /// jamais sur les portes cantina/téléport — LA MÊME que celle protégée
+  /// du blocage pendant la génération (constante partagée).
+  Position? patapucheAnchorFor(int seed) => _pickPatapucheAnchor(
+      Random(seed + _patapucheAnchorSalt),
+      cantinaAnchorFor(seed),
+      teleportAnchorFor(seed));
 
   Position? _pickPatapucheAnchor(
       Random rng, Position? exclude1, Position? exclude2) {
