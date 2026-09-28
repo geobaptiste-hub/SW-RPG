@@ -698,8 +698,8 @@ class GameController extends Notifier<GameState?> {
         players: rewarded,
         patapuche: patapuche.copyWith(claimedBy: claimed),
       ));
-      log('🎁 ${rewarded[current.currentPlayerIndex].name} reçoit le don de '
-          'Patapuche : +100 ATK et +100 PV !');
+      log('🤗 ${rewarded[current.currentPlayerIndex].name} reçoit un câlin '
+          'de Patapuche : +100 ATK et +100 PV !');
       return MoveResult.patapuche;
     }
 

@@ -328,7 +328,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
     showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
-        title: const Text('🎁 Le don de Patapuche !'),
+        title: const Text('🤗 Patapuche vous fait un câlin !'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -342,8 +342,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
             ),
             const SizedBox(height: 12),
             const Text(
-                'Vous vous désaltérez avec Patapuche : +100 ATK et '
-                '+100 PV gagnés !'),
+                'Bonus : +100 ATK et +100 PV gagnés !'),
           ],
         ),
         actions: <Widget>[
