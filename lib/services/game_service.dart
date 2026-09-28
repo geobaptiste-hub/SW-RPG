@@ -19,6 +19,7 @@ import '../models/planet.dart';
 import '../models/player.dart';
 import '../models/portal.dart';
 import '../models/armor.dart';
+import '../models/patapuche.dart';
 import '../models/teleport_portal.dart';
 import '../models/tile.dart';
 import '../models/weapon.dart';
@@ -77,6 +78,10 @@ enum MoveResult {
   /// Case de TÉLÉPORTATION utilisée : projection vers un point éloigné
   /// (retours playtest 20/09).
   teleport,
+
+  /// Don de PATAPUCHE récupéré : +100 ATK et +100 PV (retours playtest
+  /// 20/09).
+  patapuche,
 
   /// Case de consommations de la CANTINA : PV remis au maximum (retours
   /// playtest 19/09).
@@ -175,6 +180,10 @@ class GameController extends Notifier<GameState?> {
   /// annonce « 👥 Des doubles monstres apparaissent ! »).
   bool doubleMonstersPending = false;
 
+  /// Vrai à l'apparition de PATAPUCHE (transitoire — dialog d'annonce
+  /// avec l'illustration `patapuche/apparition`).
+  bool patapuchePending = false;
+
   /// Nom de l'allié ennemi qui vient d'attaquer (transitoire — dialog).
   String? pendingEnemyAllyName;
 
@@ -246,6 +255,7 @@ class GameController extends Notifier<GameState?> {
     // est ancrée de la même façon (retours playtest 20/09).
     final Position? cantinaDoor = _mapService.cantinaAnchorFor(seed);
     final Position? teleportDoor = _mapService.teleportAnchorFor(seed);
+    final Position? patapucheDoor = _mapService.patapucheAnchorFor(seed);
 
     GameState state = GameState(
       schemaVersion: GameState.currentSchemaVersion,
@@ -270,6 +280,9 @@ class GameController extends Notifier<GameState?> {
       teleport: teleportDoor == null
           ? null
           : TeleportPortal(planet: config.planetType, position: teleportDoor),
+      patapuche: patapucheDoor == null
+          ? null
+          : Patapuche(planet: config.planetType, position: patapucheDoor),
       status: GameStatus.inProgress,
     );
 
@@ -289,9 +302,11 @@ class GameController extends Notifier<GameState?> {
       allyBiasPlayer: players[firstPlayerIndex],
       avoidPositions: <Position>{
         ..._bossPositions(state, planet.type),
-        // Aucun contenu tiré sur la porte de la cantina ni de téléport.
+        // Aucun contenu tiré sur la porte de la cantina, de téléport, ni
+        // sur la case de Patapuche.
         if (state.cantina != null) state.cantina!.anchor,
         if (state.teleport != null) state.teleport!.position,
+        if (state.patapuche != null) state.patapuche!.position,
       },
     );
     final Map<PlanetType, Planet> planets = <PlanetType, Planet>{
@@ -482,6 +497,9 @@ class GameController extends Notifier<GameState?> {
           if (current.teleport!.position2 != null)
             current.teleport!.position2!,
         ],
+        // Aucun contenu tiré sur la case de Patapuche.
+        if (current.patapuche?.planet == movingPlanet)
+          current.patapuche!.position,
       },
       bossUnlocked: current.players
           .any((Player p) => !p.eliminated && p.level >= 5),
@@ -654,6 +672,35 @@ class GameController extends Notifier<GameState?> {
         moving.planet == cantinaZone.planet &&
         target == cantinaZone.anchor) {
       return _enterCantina(newPlayers, current);
+    }
+
+    // PATAPUCHE (retours playtest 20/09) : marcher sur sa case offre le
+    // don (+100 ATK / +100 PV) — UNE SEULE FOIS par joueur. Sa case est
+    // toujours sans monstre ni contenu (il les évite).
+    final Patapuche? patapuche = current.patapuche;
+    if (patapuche != null &&
+        moving.planet == patapuche.planet &&
+        target == patapuche.position) {
+      if (patapuche.hasClaimed(moving.id)) {
+        return MoveResult.moved; // déjà donné à ce joueur : rien ne se passe
+      }
+      // Le don : +100 ATK, +100 PV max et +100 PV actuels (permanents).
+      final List<Player> rewarded = List<Player>.of(newPlayers);
+      rewarded[current.currentPlayerIndex] =
+          rewarded[current.currentPlayerIndex].copyWith(
+        patapucheAtkBonusDelta: 100,
+        patapucheHpBonusDelta: 100,
+        hp: min(rewarded[current.currentPlayerIndex].hp + 100,
+            rewarded[current.currentPlayerIndex].totalMaxHp + 100),
+      );
+      final List<String> claimed = <String>[...patapuche.claimedBy, moving.id];
+      state = _applySurvivorCheck(current.copyWith(
+        players: rewarded,
+        patapuche: patapuche.copyWith(claimedBy: claimed),
+      ));
+      log('🎁 ${rewarded[current.currentPlayerIndex].name} reçoit le don de '
+          'Patapuche : +100 ATK et +100 PV !');
+      return MoveResult.patapuche;
     }
 
     // CASE DE TÉLÉPORTATION (retours playtest 20/09, v2 bidirectionnelle) :
@@ -974,6 +1021,9 @@ class GameController extends Notifier<GameState?> {
         (state!.teleport?.planet == planet.type && state!.teleport!.position2 != null)
             ? state!.teleport!.position2
             : null;
+    final Position? patapuchePos = (state!.patapuche?.planet == planet.type)
+        ? state!.patapuche!.position
+        : null;
     // Un SOIN redéposé ne doit pas être voisin d'un autre soin (retours
     // playtest 20/09 : jamais deux soins sur des cases voisines).
     bool healSiteNearby(Position p) {
@@ -1004,6 +1054,7 @@ class GameController extends Notifier<GameState?> {
             Position(t.x, t.y) != cantinaDoor &&
             Position(t.x, t.y) != teleportDoor &&
             Position(t.x, t.y) != teleportDoor2 &&
+            Position(t.x, t.y) != patapuchePos &&
             // Jamais de carte redéposée DANS la cantina (retours playtest
             // 19/09 : zone sans combat ni contenu).
             !t.cantina &&
@@ -1498,6 +1549,8 @@ class GameController extends Notifier<GameState?> {
           if (next.teleport!.position2 != null)
             next.teleport!.position2!,
         ],
+        if (next.patapuche?.planet == nextPlanet.type)
+          next.patapuche!.position,
       },
       bossUnlocked: next.players
           .any((Player p) => !p.eliminated && p.level >= 5),
@@ -1534,8 +1587,19 @@ class GameController extends Notifier<GameState?> {
       next = _spawnGuaranteedPortals(next);
     }
 
+    // L'état courant (rotation + populate de CE endTurn) devient la base
+    // des spawns internes (boss, doubles monstres, Patapuche) — sinon
+    // leurs propres affectations d'état seraient écrasées par la copie
+    // obsolète `next` (fix 21/09 : les doubles/Patapuche n'apparaissaient
+    // jamais via endTurn).
+    state = next;
     _maybeSpawnBosses();
     _maybeSpawnDoubleMonsters();
+    _maybeSpawnPatapuche();
+    _movePatapuche();
+    // Les spawns internes ont pu modifier l'état : on repart de l'état à
+    // jour pour les conditions de victoire et la sauvegarde.
+    next = state ?? next;
     next = _checkVictoryConditions(next);
     next = next.copyWith(savedAt: DateTime.now());
     state = next;
@@ -1623,6 +1687,7 @@ class GameController extends Notifier<GameState?> {
     // peut faire passer le joueur N5) et n'est pas écrasé.
     _maybeSpawnBosses();
     _maybeSpawnDoubleMonsters();
+    _maybeSpawnPatapuche();
     return MonsterVictoryOutcome(
         playerHp: updated.hp,
         playerEliminated: updated.eliminated,
@@ -1749,6 +1814,7 @@ class GameController extends Notifier<GameState?> {
     // passer N5 grâce à l'XP de chasseur) et n'est pas écrasé.
     _maybeSpawnBosses();
     _maybeSpawnDoubleMonsters();
+    _maybeSpawnPatapuche();
   }
 
   // ---------------------------------------------------------------------------
@@ -1859,6 +1925,9 @@ class GameController extends Notifier<GameState?> {
             next.cantina?.planet == mainType ? next.cantina!.anchor : null,
         teleportDoor: next.teleport?.planet == mainType
             ? next.teleport!.position
+            : null,
+        patapuchePosition: next.patapuche?.planet == mainType
+            ? next.patapuche!.position
             : null,
       );
       if (spot == null) break;
@@ -1977,6 +2046,90 @@ class GameController extends Notifier<GameState?> {
       currentPlanet: planets[s.planetType] ?? s.currentPlanet,
       doubleMonstersUnlocked: true,
     );
+  }
+
+  /// PREMIER joueur niveau 2 (retours playtest 20/09) : PATAPUCHE
+  /// apparaît sur la planète principale (case libre au hasard, hors
+  /// départs/contenus/portes) + annonce au plateau.
+  void _maybeSpawnPatapuche() {
+    final GameState? s = state;
+    if (s == null || s.status != GameStatus.inProgress) return;
+    if (s.patapuche != null) return;
+    if (!s.players.any((Player p) => !p.eliminated && p.level >= 2)) return;
+    final PlanetType mainType = s.planets.keys
+        .firstWhere((PlanetType t) => PlanetConstants.startPlanets.contains(t),
+            orElse: () => s.planetType);
+    final Position? anchor = _mapService.patapucheAnchorFor(s.seed);
+    if (anchor == null) return;
+    state = s.copyWith(
+      patapuche: Patapuche(planet: mainType, position: anchor),
+    );
+    patapuchePending = true;
+    log('🐾 Patapuche apparaît sur la planète !');
+  }
+
+  /// Déplacement de Patapuche à CHAQUE fin de tour : une case au hasard
+  /// (jouable, sans joueur/monstre/contenu). Bloqué par des monstres ou
+  /// du contenu ? Il SAUTE par-dessus : la case valide libre la plus
+  /// proche (anneaux 2, 3, 4…). Ne se déplace que sur la planète
+  /// principale.
+  void _movePatapuche() {
+    final GameState? s = state;
+    final Patapuche? patapuche = s?.patapuche;
+    if (s == null ||
+        patapuche == null ||
+        s.status != GameStatus.inProgress ||
+        s.planets[patapuche.planet] == null) {
+      return;
+    }
+    final Planet? mainPlanetOrNull = s.planets[patapuche.planet];
+    if (mainPlanetOrNull == null) return;
+    final Planet planet = mainPlanetOrNull;
+    final Set<Position> occupied = <Position>{
+      for (final Player p in s.players)
+        if (!p.eliminated && p.planet == patapuche.planet) p.position,
+    };
+
+    bool tileValide(Position p) {
+      if (!planet.isWalkableAt(p.x, p.y)) return false;
+      if (occupied.contains(p)) return false;
+      final Tile tile = planet.tileAt(p.x, p.y);
+      // Aucun monstre, aucun contenu (allié/objet/soin), hors cantina.
+      if (tile.monster != null ||
+          tile.ally != null ||
+          tile.weapon != null ||
+          tile.armor != null ||
+          tile.healSite ||
+          tile.cantina) {
+        return false;
+      }
+      return true;
+    }
+
+    // Anneaux de Chebyshev 1, 2, 3, 4 : la case valide LA PLUS PROCHE
+    // (saut par-dessus les monstres/contenus si bloqué — jamais coincé).
+    for (int ring = 1; ring <= 4; ring++) {
+      final List<Position> valides = <Position>[];
+      for (int dy = -ring; dy <= ring; dy++) {
+        for (int dx = -ring; dx <= ring; dx++) {
+          if (dx.abs() != ring && dy.abs() != ring) continue;
+          final int nx = patapuche.position.x + dx;
+          final int ny = patapuche.position.y + dy;
+          final Tile? tile = planet.tileAtOrNull(nx, ny);
+          if (tile == null || !tile.walkable) continue;
+          final Position p = Position(nx, ny);
+          if (tileValide(p)) valides.add(p);
+        }
+      }
+      if (valides.isNotEmpty) {
+        final Position destination =
+            valides[_diceRandom.nextInt(valides.length)];
+        state = s.copyWith(patapuche: patapuche.copyWith(position: destination));
+        return;
+      }
+    }
+    // Aucune case valide dans les 4 anneaux : Patapuche reste sur place
+    // (cas extrême — planète saturée de monstres).
   }
 
   void _maybeSpawnBosses() {

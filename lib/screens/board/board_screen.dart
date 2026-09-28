@@ -206,6 +206,9 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
       // Case de téléportation utilisée (retours playtest 20/09).
       ref.read(soundControllerProvider).playSfx('portail');
       _showTeleportDialog();
+    } else if (result == MoveResult.patapuche) {
+      // Le don de Patapuche (retours playtest 20/09).
+      _showPatapucheBonusDialog();
     } else if (result == MoveResult.cantinaTravel) {
       // Entrée dans la cantina par la case-portail (retours playtest
       // 19/09 v2) : la musique bascule via _updateAmbience (listen).
@@ -273,6 +276,76 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
             'Marchez sur le comptoir (ligne du milieu) pour vous '
             'désaltérer et regagner tous vos PV. Repassez par la case '
             'd\'entrée pour ressortir.'),
+        actions: <Widget>[
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Apparition de PATAPUCHE (retours playtest 20/09) : dialog de
+  /// transition avec l'illustration déposée
+  /// (`assets/images/patapuche/apparition.jpg|png`).
+  void _showPatapucheAppearDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('🐾 Patapuche apparaît !'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            CardImage(
+              category: 'patapuche',
+              id: 'apparition',
+              size: 180,
+              fit: BoxFit.contain,
+              fallbackIcon: Icons.cruelty_free,
+              fallbackIconColor: AppColors.gold,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+                'Une créature farceuse se promène désormais sur la '
+                'planète… Marchez sur elle pour recevoir son don : '
+                '+100 ATK et +100 PV (une fois par joueur) !'),
+          ],
+        ),
+        actions: <Widget>[
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Don de PATAPUCHE (retours playtest 20/09) : +100 ATK et +100 PV,
+  /// une seule fois par joueur — l'illustration déposée s'affiche.
+  void _showPatapucheBonusDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('🎁 Le don de Patapuche !'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            CardImage(
+              category: 'patapuche',
+              id: 'bonus',
+              size: 180,
+              fit: BoxFit.contain,
+              fallbackIcon: Icons.volunteer_activism,
+              fallbackIconColor: AppColors.gold,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+                'Vous vous désaltérez avec Patapuche : +100 ATK et '
+                '+100 PV gagnés !'),
+          ],
+        ),
         actions: <Widget>[
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -603,6 +676,10 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
         );
         controller.bossAwakeningPlanets.clear();
       }
+      if (controller.patapuchePending) {
+        controller.patapuchePending = false;
+        _showPatapucheAppearDialog();
+      }
       if (controller.doubleMonstersPending) {
         controller.doubleMonstersPending = false;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -652,6 +729,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
                         portals: state.portals,
                         cantina: state.cantina,
                         teleport: state.teleport,
+                        patapuche: state.patapuche,
                         controller: _boardController,
                         moveTargets: targets,
                         onMoveTargetTap: (Position target) =>

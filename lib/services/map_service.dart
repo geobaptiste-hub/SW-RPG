@@ -35,12 +35,17 @@ class MapService {
     // cachée, protégée du blocage, jamais sur la porte de la cantina.
     final Position? teleportDoor =
         _pickTeleportAnchor(Random(seed + 0x7E1E10), cantinaDoor);
+    // La CASE DE PATAPUCHE (retours playtest 20/09) : troisième case
+    // cachée, protégée du blocage, jamais sur les deux autres portes.
+    final Position? patapucheAnchor =
+        _pickPatapucheAnchor(Random(seed + 0x9A7B10), cantinaDoor, teleportDoor);
     // Nombre d'essais de sécurité : l'algorithme garantit la connectivité à
     // chaque pose de bloc, il aboutit statistiquement toujours.
     for (int attempt = 0; attempt < 200; attempt++) {
       final Planet? planet = _tryGeneratePlanet(
           type, rng, cantinaDoor,
-          teleportDoor: teleportDoor);
+          teleportDoor: teleportDoor,
+          patapucheAnchor: patapucheAnchor);
       if (planet != null) return planet;
     }
     throw StateError(
@@ -57,6 +62,27 @@ class MapService {
   /// hors départs, jamais sur la porte de la cantina.
   Position? teleportAnchorFor(int seed) =>
       _pickTeleportAnchor(Random(seed + 0x7E1E10), cantinaAnchorFor(seed));
+
+  /// Position de PATAPUCHE pour une graine : déterministe, hors départs,
+  /// jamais sur les portes cantina/téléport.
+  Position? patapucheAnchorFor(int seed) =>
+      _pickPatapucheAnchor(Random(seed + 0x9A7B1E), cantinaAnchorFor(seed),
+          teleportAnchorFor(seed));
+
+  Position? _pickPatapucheAnchor(
+      Random rng, Position? exclude1, Position? exclude2) {
+    final Set<Position> starts = BoardConstants.startPositions.toSet();
+    final List<Position> candidates = <Position>[
+      for (int y = 0; y < BoardConstants.gridHeight; y++)
+        for (int x = 0; x < BoardConstants.gridWidth; x++)
+          if (!starts.contains(Position(x, y)) &&
+              Position(x, y) != exclude1 &&
+              Position(x, y) != exclude2)
+            Position(x, y),
+    ];
+    if (candidates.isEmpty) return null;
+    return candidates[rng.nextInt(candidates.length)];
+  }
 
   Position? _pickTeleportAnchor(Random rng, Position? exclude) {
     final Set<Position> starts = BoardConstants.startPositions.toSet();
@@ -116,6 +142,7 @@ class MapService {
     Random rng,
     Position? cantinaDoor, {
     Position? teleportDoor,
+    Position? patapucheAnchor,
   }) {
     final int width = BoardConstants.gridWidth;
     final int height = BoardConstants.gridHeight;
@@ -129,6 +156,7 @@ class MapService {
     final Set<Position> protected = <Position>{
       if (cantinaDoor != null) cantinaDoor,
       if (teleportDoor != null) teleportDoor,
+      if (patapucheAnchor != null) patapucheAnchor,
     };
 
     bool isBlocked(int x, int y) => blocked.contains(Position(x, y));
@@ -305,6 +333,7 @@ class MapService {
     required Random rng,
     Position? cantinaDoor,
     Position? teleportDoor,
+    Position? patapuchePosition,
   }) {
     final Set<Position> starts = BoardConstants.startPositions.toSet();
     final List<Position> candidates = <Position>[];
@@ -317,7 +346,10 @@ class MapService {
       }
       // Jamais de portail SUR la porte de la cantina ou de téléportation,
       // ni DANS la cantina (retours playtest 19-20/09).
-      if (tile.cantina || position == cantinaDoor || position == teleportDoor) {
+      if (tile.cantina ||
+          position == cantinaDoor ||
+          position == teleportDoor ||
+          position == patapuchePosition) {
         continue;
       }
       if (tile.monster != null ||

@@ -1,0 +1,10 @@
+Déposez ici les images de PATAPUCHE — sans recompilation. PNG ou JPG.
+
+  apparition.jpg / .png  — illustration affichée dans le dialog quand
+                           Patapuche APPARAÎT (au premier joueur niveau 2).
+  bonus.jpg / .png       — illustration affichée dans le dialog du DON
+                           (+100 ATK et +100 PV, une fois par joueur).
+  pion.jpg / .png        — le PION vu de dessus qui se déplace sur la
+                           carte (médaillon rond sur sa case).
+
+Sans images : icônes de repli (aucune erreur).

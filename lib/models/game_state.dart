@@ -2,6 +2,7 @@ import '../core/constants/enums.dart';
 import '../core/utils/json_utils.dart';
 import 'boss.dart';
 import 'cantina_zone.dart';
+import 'patapuche.dart';
 import 'teleport_portal.dart';
 import 'planet.dart';
 import 'player.dart';
@@ -69,6 +70,10 @@ class GameState {
   /// 20/09) ; `null` pour les parties créées avant cette fonctionnalité.
   final TeleportPortal? teleport;
 
+  /// PATAPUCHE (retours playtest 20/09) ; `null` pour les parties créées
+  /// avant cette fonctionnalité ou tant qu'aucun joueur n'est niveau 2.
+  final Patapuche? patapuche;
+
   /// Doubles monstres débloqués (au premier joueur niveau 4) — persisté
   /// pour survivre aux rechargements de page (web).
   final bool doubleMonstersUnlocked;
@@ -96,6 +101,7 @@ class GameState {
     this.cantina,
     this.teleport,
     this.doubleMonstersUnlocked = false,
+    this.patapuche,
     required this.status,
     this.savedAt,
   });
@@ -131,6 +137,7 @@ class GameState {
     CantinaZone? cantina,
     TeleportPortal? teleport,
     bool? doubleMonstersUnlocked,
+    Patapuche? patapuche,
     GameStatus? status,
     DateTime? savedAt,
   }) {
@@ -157,6 +164,7 @@ class GameState {
       teleport: teleport ?? this.teleport,
       doubleMonstersUnlocked:
           doubleMonstersUnlocked ?? this.doubleMonstersUnlocked,
+      patapuche: patapuche ?? this.patapuche,
       status: status ?? this.status,
       savedAt: savedAt ?? this.savedAt,
     );
@@ -187,6 +195,7 @@ class GameState {
         'portals': portals.map((Portal portal) => portal.toJson()).toList(),
         if (cantina != null) 'cantina': cantina!.toJson(),
         if (teleport != null) 'teleport': teleport!.toJson(),
+        if (patapuche != null) 'patapuche': patapuche!.toJson(),
         'doubleMonstersUnlocked': doubleMonstersUnlocked,
         'status': enumToName(status),
         'savedAt': savedAt?.toIso8601String(),
@@ -229,6 +238,9 @@ class GameState {
       teleport: json['teleport'] == null
           ? null
           : TeleportPortal.fromJson(json['teleport']),
+      patapuche: json['patapuche'] == null
+          ? null
+          : Patapuche.fromJson(json['patapuche']),
       doubleMonstersUnlocked:
           json['doubleMonstersUnlocked'] as bool? ?? false,
       status: enumFromName(

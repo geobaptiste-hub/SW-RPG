@@ -97,6 +97,12 @@ class Player {
   final PlanetType? returnPlanet;
   final Position? returnPosition;
 
+  /// Don de PATAPUCHE (retours playtest 20/09) : bonus permanents gagnés
+  /// en marchant sur sa case (+100 ATK et +100 PV max par don, une fois
+  /// par joueur pour toute la partie).
+  final int patapucheAtkBonus;
+  final int patapucheHpBonus;
+
   const Player({
     required this.id,
     required this.name,
@@ -117,6 +123,8 @@ class Player {
     this.storedArmor,
     this.storedAlly,
     this.teamCapacityBonus = 0,
+    this.patapucheAtkBonus = 0,
+    this.patapucheHpBonus = 0,
     PlanetType? planet,
     this.returnPlanet,
     this.returnPosition,
@@ -238,11 +246,17 @@ class Player {
       (weapon?.attackBonus ?? 0) +
       squadAttackBonus +
       nukerAttackBonus +
-      specialAttackBonus;
+      specialAttackBonus +
+      patapucheAtkBonus;
 
-  /// PV maximum : base + tenue + tanks + spéciales amies (Sprint 4).
+  /// PV maximum : base + tenue + tanks + spéciales amies + don
+  /// PATAPUCHE (retours playtest 20/09).
   int get totalMaxHp =>
-      maxHp + (armor?.hpBonus ?? 0) + tankHpBonus + specialHpBonus;
+      maxHp +
+      (armor?.hpBonus ?? 0) +
+      tankHpBonus +
+      specialHpBonus +
+      patapucheHpBonus;
 
   Player copyWith({
     String? id,
@@ -270,6 +284,8 @@ class Player {
     Ally? storedAlly,
     bool clearStoredAlly = false,
     int teamCapacityBonusDelta = 0,
+    int patapucheAtkBonusDelta = 0,
+    int patapucheHpBonusDelta = 0,
     PlanetType? planet,
     PlanetType? returnPlanet,
     bool clearReturn = false,
@@ -296,6 +312,10 @@ class Player {
       storedArmor: clearStoredArmor ? null : (storedArmor ?? this.storedArmor),
       storedAlly: clearStoredAlly ? null : (storedAlly ?? this.storedAlly),
       teamCapacityBonus: teamCapacityBonus + teamCapacityBonusDelta,
+      patapucheAtkBonus:
+          patapucheAtkBonus + patapucheAtkBonusDelta,
+      patapucheHpBonus:
+          patapucheHpBonus + patapucheHpBonusDelta,
       planet: planet ?? this.planet,
       returnPlanet:
           clearReturn ? null : (returnPlanet ?? this.returnPlanet),
@@ -324,6 +344,8 @@ class Player {
         'storedArmor': storedArmor?.toJson(),
         if (storedAlly != null) 'storedAlly': storedAlly!.toJson(),
         'teamCapacityBonus': teamCapacityBonus,
+        'patapucheAtkBonus': patapucheAtkBonus,
+        'patapucheHpBonus': patapucheHpBonus,
         'planet': enumToName(planet),
         if (returnPlanet != null) 'returnPlanet': enumToName(returnPlanet!),
         if (returnPosition != null)
@@ -362,6 +384,8 @@ class Player {
       storedAlly:
           json['storedAlly'] == null ? null : Ally.fromJson(json['storedAlly']),
       teamCapacityBonus: (json['teamCapacityBonus'] as num?)?.toInt() ?? 0,
+      patapucheAtkBonus: (json['patapucheAtkBonus'] as num?)?.toInt() ?? 0,
+      patapucheHpBonus: (json['patapucheHpBonus'] as num?)?.toInt() ?? 0,
       planet: enumFromName(
           PlanetType.values, json['planet'], PlanetConstants.startPlanets.first),
       returnPlanet: json['returnPlanet'] == null

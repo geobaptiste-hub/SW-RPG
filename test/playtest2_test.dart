@@ -19,6 +19,7 @@ import 'package:star_wars_rpg/models/planet.dart';
 import 'package:star_wars_rpg/models/portal.dart';
 import 'package:star_wars_rpg/models/player.dart';
 import 'package:star_wars_rpg/models/tile.dart';
+import 'package:star_wars_rpg/models/patapuche.dart';
 import 'package:star_wars_rpg/models/teleport_portal.dart';
 import 'package:star_wars_rpg/models/weapon.dart';
 import 'package:star_wars_rpg/screens/game_over/game_over_screen.dart'
@@ -148,6 +149,7 @@ GameState _stateOptions({
   required List<Player> players,
   required bool doubleMonstersUnlocked,
   TeleportPortal? teleport,
+  Patapuche? patapuche,
   int movement = 0,
 }) {
   return GameState(
@@ -167,6 +169,7 @@ GameState _stateOptions({
     bosses: const [],
     portals: const [],
     teleport: teleport,
+    patapuche: patapuche,
     status: GameStatus.inProgress,
   );
 }

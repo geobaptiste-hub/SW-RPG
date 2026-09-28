@@ -8,6 +8,7 @@ import '../core/theme/app_theme.dart';
 import '../models/boss.dart';
 import '../models/cantina_zone.dart';
 import '../models/planet.dart';
+import '../models/patapuche.dart';
 import '../models/teleport_portal.dart';
 import '../models/player.dart';
 import '../models/portal.dart';
@@ -73,6 +74,10 @@ class BoardWidget extends StatefulWidget {
   /// la première utilisation, puis image du portail sur la case.
   final TeleportPortal? teleport;
 
+  /// PATAPUCHE (retours playtest 20/09) : le pion se déplace sur la
+  /// planète principale et se rend visible quand sa case l'est.
+  final Patapuche? patapuche;
+
   /// Cibles de déplacement surlignées (vide si aucune phase de déplacement).
   final Set<Position> moveTargets;
   final void Function(Position target)? onMoveTargetTap;
@@ -91,6 +96,7 @@ class BoardWidget extends StatefulWidget {
     this.portals = const [],
     this.cantina,
     this.teleport,
+    this.patapuche,
     this.moveTargets = const {},
     this.onMoveTargetTap,
     this.galaxyView = false,
@@ -494,6 +500,63 @@ class _BoardWidgetState extends State<BoardWidget>
                         }),
                       ),
                     ),
+              // PATAPUCHE (retours playtest 20/09) : le pion (image
+              // `assets/images/patapuche/pion.jpg|png`) se promène sur la
+              // planète — visible quand sa case l'est, comme les boss.
+              if (widget.patapuche != null &&
+                  widget.patapuche!.planet == widget.planet.type &&
+                  (widget.planet
+                          .tileAtOrNull(widget.patapuche!.position.x,
+                              widget.patapuche!.position.y)
+                          ?.visible ??
+                      false))
+                Positioned(
+                  left: widget.patapuche!.position.x *
+                          BoardConstants.tileExtent +
+                      (BoardConstants.tileExtent -
+                              BoardConstants.tileExtent * 0.66) /
+                          2,
+                  top: widget.patapuche!.position.y *
+                          BoardConstants.tileExtent +
+                      (BoardConstants.tileExtent -
+                              BoardConstants.tileExtent * 0.66) /
+                          2,
+                  width: BoardConstants.tileExtent * 0.66,
+                  height: BoardConstants.tileExtent * 0.66,
+                  child: IgnorePointer(
+                    child: Consumer(builder:
+                        (BuildContext context, WidgetRef ref, Widget? _) {
+                      final ImageProvider? pionImage = ref
+                          .watch(imageServiceProvider)
+                          .providerFor('patapuche', 'pion');
+                      return Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.background,
+                          border: Border.all(
+                              color: AppColors.gold, width: 2),
+                          boxShadow: const [
+                            BoxShadow(
+                                color: Colors.black54, blurRadius: 6),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: pionImage == null
+                              ? const Icon(Icons.cruelty_free,
+                                  size: 26, color: AppColors.gold)
+                              : Image(image: pionImage,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (BuildContext context,
+                                          Object error,
+                                          StackTrace? stackTrace) =>
+                                      const Icon(Icons.cruelty_free,
+                                          size: 26,
+                                          color: AppColors.gold)),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
               // TÉLÉPORTATION (retours playtest 20/09, v2
               // bidirectionnelle) : une fois le couple ouvert, l'image du
               // portail déposée (`assets/images/teleport/portail.jpg|png`)
