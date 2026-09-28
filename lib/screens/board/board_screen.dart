@@ -300,7 +300,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
             CardImage(
               category: 'patapuche',
               id: 'apparition',
-              size: 180,
+              size: 260,
               fit: BoxFit.contain,
               fallbackIcon: Icons.cruelty_free,
               fallbackIconColor: AppColors.gold,
@@ -335,7 +335,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
             CardImage(
               category: 'patapuche',
               id: 'bonus',
-              size: 180,
+              size: 260,
               fit: BoxFit.contain,
               fallbackIcon: Icons.volunteer_activism,
               fallbackIconColor: AppColors.gold,
@@ -636,6 +636,16 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    // PATAPUCHE (retours playtest 20/09) : l'apparition se produit au
+    // premier N2 (souvent PENDANT un combat — l'écran plateau est démonté)
+    // → le dialog est déclenché au retour sur le plateau (ce build).
+    if (ref.read(gameControllerProvider.notifier).patapuchePending) {
+      ref.read(gameControllerProvider.notifier).patapuchePending = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showPatapucheAppearDialog();
+      });
+    }
+
     // Fin de partie (Sprint 5) : écran Game Over dédié.
     if (state.status == GameStatus.finished && !_gameOverShown) {
       _gameOverShown = true;
@@ -674,10 +684,6 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
           SnackBar(content: Text('⚡ Un boss s’éveille sur $names !')),
         );
         controller.bossAwakeningPlanets.clear();
-      }
-      if (controller.patapuchePending) {
-        controller.patapuchePending = false;
-        _showPatapucheAppearDialog();
       }
       if (controller.doubleMonstersPending) {
         controller.doubleMonstersPending = false;
