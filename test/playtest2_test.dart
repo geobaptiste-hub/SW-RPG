@@ -1409,6 +1409,108 @@ void main() {
       expect(state.teleport!.visited, isFalse,
           reason: 'pas de logo avant la première utilisation');
     });
+
+    test('depuis une VRAIE partie créée : marcher sur la porte téléporte, '
+        'et l’aller-retour fonctionne', () async {
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final GameController controller =
+          container.read(gameControllerProvider.notifier);
+      final GameState created = await controller.createNewGame(NewGameConfig(
+        mode: GameMode.chacunPourSoi,
+        playerCount: 2,
+        teamSize: 0,
+        planetType: PlanetType.hoth,
+        characters: <CharacterDefinition>[
+          CharacterConstants.characters[0],
+          CharacterConstants.characters[2],
+        ],
+      ));
+
+      // La porte existe dès la création, ancrée par la seed, jouable,
+      // invisible avant usage.
+      final Position door = created.teleport!.position;
+      expect(door, mapService.teleportAnchorFor(created.seed),
+          reason: 'la porte est l’ancre seedée');
+      expect(created.teleport!.planet, PlanetType.hoth);
+      expect(created.teleport!.visited, isFalse);
+      expect(created.currentPlanet.tileAt(door.x, door.y).walkable, isTrue);
+
+      // Le joueur actif se place sur une case voisine de la porte.
+      final Position from = mapService
+          .neighborPositions(door, created.currentPlanet)
+          .firstWhere((Position p) =>
+              created.currentPlanet.isWalkableAt(p.x, p.y));
+      final List<Player> players = List<Player>.of(created.players);
+      players[created.currentPlayerIndex] =
+          created.activePlayer.copyWith(position: from);
+      controller.state = created.copyWith(
+        players: players,
+        movementPointsRemaining: 2,
+      );
+
+      final MoveResult result = controller.moveActivePlayerTo(door.x, door.y);
+      expect(result, MoveResult.teleport);
+      final GameState after = container.read(gameControllerProvider)!;
+      expect(after.teleport!.visited, isTrue,
+          reason: 'les deux cases deviennent visibles (médaillons)');
+      expect(after.teleport!.position2, isNotNull,
+          reason: 'la seconde case fixe du couple est créée');
+      expect(after.activePlayer.position, after.teleport!.position2);
+      expect(
+        after.activePlayer.position.chebyshevDistanceTo(door),
+        greaterThanOrEqualTo(12),
+        reason: 'l’arrivée est à l’autre bout de la planète',
+      );
+
+      // V2 BIDIRECTIONNELLE : repasser par la seconde case ramène à la porte.
+      final Position second = after.teleport!.position2!;
+      final Position back = mapService
+          .neighborPositions(second, after.currentPlanet)
+          .firstWhere(
+              (Position p) => after.currentPlanet.isWalkableAt(p.x, p.y));
+      final List<Player> playersBack = List<Player>.of(after.players);
+      playersBack[after.currentPlayerIndex] =
+          after.activePlayer.copyWith(position: back);
+      controller.state = after.copyWith(
+        players: playersBack,
+        movementPointsRemaining: 2,
+      );
+      final MoveResult result2 =
+          controller.moveActivePlayerTo(second.x, second.y);
+      expect(result2, MoveResult.teleport);
+      expect(container.read(gameControllerProvider)!.activePlayer.position,
+          door,
+          reason: 'aller-retour : retour sur la porte d’origine');
+    });
+
+    test('la porte est jouable et ATTEIGNABLE à pied depuis un départ '
+        '(toute graine)', () {
+      for (final int seed in <int>[1, 7, 42, 123, 999, 2026, 0x7FFFFFFF]) {
+        final Planet planet =
+            mapService.generateStartPlanet(PlanetType.hoth, seed: seed);
+        final Position? door = mapService.teleportAnchorFor(seed);
+        expect(door, isNotNull, reason: 'seed $seed');
+        expect(planet.tileAt(door!.x, door.y).walkable, isTrue,
+            reason: 'seed $seed : porte protégée du blocage');
+
+        // BFS depuis la porte : la zone jouable est connectée, un départ
+        // doit donc être joignable (et inversement).
+        final Set<Position> seen = <Position>{door};
+        final List<Position> queue = <Position>[door];
+        while (queue.isNotEmpty) {
+          final Position p = queue.removeAt(0);
+          for (final Position n in mapService.neighborPositions(p, planet)) {
+            if (planet.isWalkableAt(n.x, n.y) && seen.add(n)) queue.add(n);
+          }
+        }
+        expect(
+          BoardConstants.startPositions.any(seen.contains),
+          isTrue,
+          reason: 'seed $seed : on peut marcher jusqu’à la porte',
+        );
+      }
+    });
   });
 
     test('FIX 20/09 : le premier N4 ajoute des cases doubles monstres',

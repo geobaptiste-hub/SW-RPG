@@ -762,6 +762,11 @@ class GameController extends Notifier<GameState?> {
       for (final Player p in current.players)
         if (!p.eliminated && p.id != current.activePlayer.id) p.position,
     };
+    // La case jumelle ne doit JAMAIS tomber sur celle de Patapuche (réservée
+    // ou déjà occupée par elle) : les deux se partageraient la case et le
+    // don passerait avant la téléportation en marchant dessus.
+    final Position? patapucheSpot =
+        _patapucheReservedPosition(current, planet.type);
 
     // L'ARRIVÉE : la case du couple opposée à celle foulée.
     TeleportPortal used = portal;
@@ -777,6 +782,7 @@ class GameController extends Notifier<GameState?> {
             occupied.contains(p) ||
             p == portal.position ||
             p == target ||
+            p == patapucheSpot ||
             t.monster != null ||
             t.monster2 != null ||
             t.ally != null ||
