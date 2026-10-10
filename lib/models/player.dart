@@ -103,6 +103,12 @@ class Player {
   final int patapucheAtkBonus;
   final int patapucheHpBonus;
 
+  /// SUPER ATTAQUE (retours playtest 10/10) : numéro du tour du jeu à
+  /// partir duquel elle est de nouveau utilisable. 0 = disponible dès le
+  /// début ; après chaque utilisation, tour courant + 5 (compteur « Tour
+  /// N » du plateau — recharge fixe, même si l'attaque est loupée).
+  final int superAttackReadyTurn;
+
   const Player({
     required this.id,
     required this.name,
@@ -125,6 +131,7 @@ class Player {
     this.teamCapacityBonus = 0,
     this.patapucheAtkBonus = 0,
     this.patapucheHpBonus = 0,
+    this.superAttackReadyTurn = 0,
     PlanetType? planet,
     this.returnPlanet,
     this.returnPosition,
@@ -286,6 +293,7 @@ class Player {
     int teamCapacityBonusDelta = 0,
     int patapucheAtkBonusDelta = 0,
     int patapucheHpBonusDelta = 0,
+    int? superAttackReadyTurn,
     PlanetType? planet,
     PlanetType? returnPlanet,
     bool clearReturn = false,
@@ -316,6 +324,7 @@ class Player {
           patapucheAtkBonus + patapucheAtkBonusDelta,
       patapucheHpBonus:
           patapucheHpBonus + patapucheHpBonusDelta,
+      superAttackReadyTurn: superAttackReadyTurn ?? this.superAttackReadyTurn,
       planet: planet ?? this.planet,
       returnPlanet:
           clearReturn ? null : (returnPlanet ?? this.returnPlanet),
@@ -346,6 +355,7 @@ class Player {
         'teamCapacityBonus': teamCapacityBonus,
         'patapucheAtkBonus': patapucheAtkBonus,
         'patapucheHpBonus': patapucheHpBonus,
+        'superAttackReadyTurn': superAttackReadyTurn,
         'planet': enumToName(planet),
         if (returnPlanet != null) 'returnPlanet': enumToName(returnPlanet!),
         if (returnPosition != null)
@@ -386,6 +396,8 @@ class Player {
       teamCapacityBonus: (json['teamCapacityBonus'] as num?)?.toInt() ?? 0,
       patapucheAtkBonus: (json['patapucheAtkBonus'] as num?)?.toInt() ?? 0,
       patapucheHpBonus: (json['patapucheHpBonus'] as num?)?.toInt() ?? 0,
+      superAttackReadyTurn:
+          (json['superAttackReadyTurn'] as num?)?.toInt() ?? 0,
       planet: enumFromName(
           PlanetType.values, json['planet'], PlanetConstants.startPlanets.first),
       returnPlanet: json['returnPlanet'] == null

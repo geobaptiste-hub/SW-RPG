@@ -1,0 +1,8 @@
+Déposez ici les sons de la SUPER ATTAQUE — sans recompilation sur
+desktop (le web exige un commit + push). MP3 conseillé (web : mp3
+uniquement ; desktop accepte aussi wav/ogg). Noms attendus :
+
+  reussie.mp3  — super attaque RÉUSSIE (« Bim ! », dégâts ×3)
+  ratee.mp3    — super attaque LOUPÉE (« Loupé... », aucun dégât)
+
+Si un fichier manque : pas de son (aucune erreur).

@@ -36,10 +36,21 @@ void main() {
       }
     });
 
-    test('dégâts doublés en cas de critique (décision 07/09/2026)', () {
-      expect(CombatService.attackDamage(attackTotal: 125, roll: 6), 250);
-      expect(CombatService.attackDamage(attackTotal: 125, roll: 3), 125);
-      expect(CombatService.attackDamage(attackTotal: 2000, roll: 6), 4000);
+    test('dégâts dans la plage ±10 %, doublés en cas de critique (10/10)',
+        () {
+      final CombatService combat = CombatService(random: Random(7));
+      for (int i = 0; i < 300; i++) {
+        // Attaque classique : ATK ±10 % (ex. 125 → 112-137).
+        expect(combat.attackDamage(attackTotal: 125, roll: 3),
+            inInclusiveRange(112, 137));
+        // Critique (6) : la valeur tirée ±10 % est doublée (224-274).
+        expect(combat.attackDamage(attackTotal: 125, roll: 6),
+            inInclusiveRange(224, 274));
+        expect(combat.attackDamage(attackTotal: 125, roll: 6) % 2, 0,
+            reason: 'un critique est le double de la valeur tirée');
+        expect(combat.attackDamage(attackTotal: 2000, roll: 6),
+            inInclusiveRange(3600, 4400));
+      }
     });
   });
 

@@ -165,9 +165,10 @@ void main() {
       CombatSession session = container.read(combatControllerProvider)!;
       expect(session.playerHp, lessThan(200),
           reason: 'le monstre a riposté (dégâts par attaque — Sprint 4.1)');
-      expect(session.playerHp,
-          inInclusiveRange(200 - 20 - (20 / 2).ceil(), 200 - 10),
-          reason: 'riposte de 20 PV (÷ 2 max avec tank, ici aucun)');
+      // Fix 20/09 : riposte = 20 ATK ±10 %, ×0,5 au N1 → 9 à 11 PV perdus.
+      expect(session.playerHp, inInclusiveRange(189, 191),
+          reason: 'riposte de 9 à 11 PV (20 ±10 %, ÷ 2 au niveau 1, '
+              'aucun tank ici)');
     });
 
     test('fuir en plein combat : dégâts conservés, pas d XP, monstre en place',

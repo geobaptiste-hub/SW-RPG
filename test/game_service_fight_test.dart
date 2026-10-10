@@ -153,8 +153,9 @@ void main() {
     final CombatSession session = container.read(combatControllerProvider)!;
     expect(session.victory, isTrue);
     expect(session.xpGained, 50);
-    expect(session.attacksUsed, greaterThanOrEqualTo(4),
-        reason: '500 PV / 250 max par coup critique');
+    expect(session.attacksUsed, greaterThanOrEqualTo(2),
+        reason: '500 PV / 112 à 137 par coup (±10 %), critique au double '
+            '(2 critiques peuvent suffire)');
 
     final GameState after = container.read(gameControllerProvider)!;
     expect(after.currentPlanet.tileAt(target.x, target.y).monster, isNull,
@@ -271,8 +272,9 @@ void main() {
 
       final GameState after = container.read(gameControllerProvider)!;
       expect(after.players[1].eliminated, isFalse);
-      expect(after.players[1].hp, inInclusiveRange(250, 499),
-          reason: '125 à 250 dégâts (critique) sur 500 PV');
+      expect(after.players[1].hp, inInclusiveRange(226, 388),
+          reason: '112 à 274 dégâts (ATK 125 ±10 %, critique au double) '
+              'sur 500 PV');
       expect(after.players[0].xp, 0, reason: 'pas de prime sans élimination');
     });
 

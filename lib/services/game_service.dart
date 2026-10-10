@@ -281,7 +281,7 @@ class GameController extends Notifier<GameState?> {
           ? null
           : TeleportPortal(planet: config.planetType, position: teleportDoor),
       // PATAPUCHE n'existe PAS encore : elle apparaît au premier niveau 2
-      // (_maybeSpawnPatapuche — fix 28/09 : créée dès le départ, le spawn
+      // (_maybeSpawnPatapuche — fix 10/10 : créée dès le départ, le spawn
       // n'avait jamais lieu et l'annonce « Patapuche apparaît » ne
       // s'affichait jamais). Seule sa CASE est réservée dès la création.
       status: GameStatus.inProgress,
@@ -1889,6 +1889,19 @@ class GameController extends Notifier<GameState?> {
     final List<Ally> allies = List<Ally>.of(active.allies)..removeAt(index);
     final List<Player> players = List<Player>.of(current.players);
     players[current.currentPlayerIndex] = active.copyWith(allies: allies);
+    state = current.copyWith(players: players);
+  }
+
+  /// SUPER ATTAQUE (retours playtest 10/10) : déclenche la RECHARGE du
+  /// joueur actif — réutilisable 5 tours du jeu plus tard (compteur
+  /// « Tour N » du plateau), que l'attaque ait réussi ou été loupée.
+  /// Persisté via la sauvegarde de fin de tour.
+  void useSuperAttack() {
+    final GameState? current = state;
+    if (current == null) return;
+    final List<Player> players = List<Player>.of(current.players);
+    players[current.currentPlayerIndex] = current.activePlayer
+        .copyWith(superAttackReadyTurn: current.turn + 5);
     state = current.copyWith(players: players);
   }
 

@@ -48,19 +48,34 @@ class CombatService {
     return min + _random.nextInt(max - min + 1);
   }
 
+  /// Attaque de JOUEUR : même plage aléatoire ±10 % que la riposte des
+  /// monstres (retours playtest 10/10). Ex. ATK 200 → entre 180 et 220.
+  int rollPlayerAttack(int attackTotal) {
+    final int min = (attackTotal * 0.9).floor();
+    final int max = (attackTotal * 1.1).floor();
+    if (max <= min) return min;
+    return min + _random.nextInt(max - min + 1);
+  }
+
+  /// SUPER ATTAQUE : 50 % de réussite (« Bim ! » ou « Loupé... »).
+  bool rollSuperAttackHit() => _random.nextBool();
+
   /// Un 6 au dé est un coup critique ; avec le soutien « critOn5 », le 5
   /// aussi (retours playtest 10/09/2026).
   static bool isCritical(int roll, {bool critOn5 = false}) =>
       roll == 6 || (critOn5 && roll == 5);
 
-  /// Dégâts d'une attaque : ATK totale, doublés si critique
-  /// (décision du 07/09/2026).
-  static int attackDamage({
+  /// Dégâts d'une attaque : ATK totale ±10 % (valeur tirée au hasard,
+  /// retours playtest 10/10), doublée si critique. N'est plus statique :
+  /// le tirage ±10 % utilise le Random du service (injectable en tests).
+  int attackDamage({
     required int attackTotal,
     required int roll,
     bool critOn5 = false,
-  }) =>
-      isCritical(roll, critOn5: critOn5) ? attackTotal * 2 : attackTotal;
+  }) {
+    final int base = rollPlayerAttack(attackTotal);
+    return isCritical(roll, critOn5: critOn5) ? base * 2 : base;
+  }
 }
 
 /// Provider du service de combat (Random injectable pour les tests).
@@ -143,6 +158,18 @@ class CombatSession {
   final int xpGained;
   final int damageTaken;
 
+  /// SUPER ATTAQUE (retours playtest 10/10) : déjà utilisée CE combat ?
+  /// (une seule par combat — indépendant de la recharge par joueur).
+  final bool superAttackUsed;
+
+  /// Résultat de la DERNIÈRE action : 0 = attaque classique, 1 = super
+  /// attaque réussie (« Bim ! »), 2 = super attaque loupée (« Loupé... »).
+  final int superAttackResult;
+
+  /// Compteur incrémenté à CHAQUE dégât infligé par le joueur actif —
+  /// déclencheur du popup « -N » (~0,5 s) sur la carte de la cible.
+  final int damageSeq;
+
   const CombatSession({
     required this.kind,
     required this.playerAttackTotal,
@@ -172,6 +199,9 @@ class CombatSession {
     this.playerEliminated = false,
     this.xpGained = 0,
     this.damageTaken = 0,
+    this.superAttackUsed = false,
+    this.superAttackResult = 0,
+    this.damageSeq = 0,
   });
 
   CombatSession copyWith({
@@ -191,6 +221,9 @@ class CombatSession {
     bool? deathPrevented,
     bool? attackTimesDiceUsed,
     int? levelsGained,
+    bool? superAttackUsed,
+    int? superAttackResult,
+    int? damageSeq,
   }) {
     return CombatSession(
       kind: kind,
@@ -221,6 +254,9 @@ class CombatSession {
       playerEliminated: playerEliminated ?? this.playerEliminated,
       xpGained: xpGained ?? this.xpGained,
       damageTaken: damageTaken ?? this.damageTaken,
+      superAttackUsed: superAttackUsed ?? this.superAttackUsed,
+      superAttackResult: superAttackResult ?? this.superAttackResult,
+      damageSeq: damageSeq ?? this.damageSeq,
     );
   }
 }
@@ -299,9 +335,11 @@ class CombatController extends Notifier<CombatSession?> {
     );
   }
 
-  /// Résout une attaque du joueur actif. [useAttackTimesDice] : soutien
-  /// « une seule fois, multipliez l'attaque par le chiffre du dé » — les
-  /// dégâts valent ATK × face, sans critique cumulé, carte consommée.
+  /// Résout une attaque CLASSIQUE du joueur actif : lancer de dé, dégâts
+  /// = ATK ±10 % (critique ×2 sur 6 — 5 avec critOn5). [useAttackTimesDice]
+  /// : soutien « une seule fois, multipliez l'attaque par le chiffre du
+  /// dé » — les dégâts valent ATK × face, sans critique cumulé, carte
+  /// consommée.
   void attack({bool useAttackTimesDice = false}) {
     final CombatSession? session = state;
     if (session == null || session.finished) return;
@@ -315,7 +353,7 @@ class CombatController extends Notifier<CombatSession?> {
     if (timesDice) {
       damage = session.playerAttackTotal * roll;
     } else {
-      damage = CombatService.attackDamage(
+      damage = _combat.attackDamage(
         attackTotal: session.playerAttackTotal,
         roll: roll,
         critOn5: session.critOn5,
@@ -324,6 +362,50 @@ class CombatController extends Notifier<CombatSession?> {
     // La carte ×dé est consommée quel que soit le résultat (usage unique).
     if (timesDice) _game.consumeAttackTimesDice();
 
+    _strike(session, game,
+        damage: damage, roll: roll, timesDice: timesDice, superResult: 0);
+  }
+
+  /// SUPER ATTAQUE (retours playtest 10/10) : utilisable UNE FOIS par
+  /// combat, 50 % de réussite (sans dé ni critique). Réussie : 3 × ATK
+  /// ±10 % (« Bim ! »). Loupée : aucun dégât (« Loupé... ») mais
+  /// l'adversaire riposte comme après une attaque sans effet. Chaque
+  /// utilisation — réussie ou loupée — recharge la super attaque pour 5
+  /// tours du jeu (persisté sur le joueur).
+  void superAttack() {
+    final CombatSession? session = state;
+    if (session == null || session.finished) return;
+    final GameState game = ref.read(gameControllerProvider)!;
+    if (game.status != GameStatus.inProgress) return;
+    if (session.superAttackUsed) return; // une seule par combat
+    if (game.turn < game.activePlayer.superAttackReadyTurn) return; // recharge
+
+    final bool hit = _combat.rollSuperAttackHit();
+    final int damage =
+        hit ? 3 * _combat.rollPlayerAttack(session.playerAttackTotal) : 0;
+    _game.useSuperAttack();
+    // Les flags de session passent AVANT le strike : chaque copyWith du
+    // résolveur les hérite (superAttackUsed ne retombe jamais).
+    state = session.copyWith(
+      superAttackUsed: true,
+      superAttackResult: hit ? 1 : 2,
+    );
+    _strike(state!, game,
+        damage: damage,
+        roll: null,
+        timesDice: false,
+        superResult: hit ? 1 : 2);
+  }
+
+  /// Applique une frappe (attaque classique ou super attaque) au type de
+  /// combat en cours : dégâts à la cible, riposte, morts empêchées,
+  /// victoire/défaite. [roll] null = super attaque (pas de dé lancé) ;
+  /// [superResult] 0 classique / 1 « Bim ! » / 2 « Loupé... ».
+  void _strike(CombatSession session, GameState game,
+      {required int damage,
+      required int? roll,
+      required bool timesDice,
+      required int superResult}) {
     if (session.kind == CombatKind.monster) {
       final int hp = session.monsterHpRemaining - damage;
       final int attacks = session.attacksUsed + 1;
@@ -374,6 +456,8 @@ class CombatController extends Notifier<CombatSession?> {
           playerEliminated: outcome.playerEliminated,
           playerHp: outcome.playerHp,
           levelsGained: levelAfter - session.playerStartLevel,
+          superAttackResult: superResult,
+          damageSeq: damage > 0 ? session.damageSeq + 1 : session.damageSeq,
         );
         return;
       }
@@ -391,6 +475,8 @@ class CombatController extends Notifier<CombatSession?> {
             damageTaken: session.damageTaken + counter,
             playerHp: 1,
             deathPrevented: true,
+            superAttackResult: superResult,
+            damageSeq: damage > 0 ? session.damageSeq + 1 : session.damageSeq,
           );
           return;
         }
@@ -407,6 +493,8 @@ class CombatController extends Notifier<CombatSession?> {
           finished: true,
           victory: false,
           playerEliminated: true,
+          superAttackResult: superResult,
+          damageSeq: damage > 0 ? session.damageSeq + 1 : session.damageSeq,
         );
         return;
       }
@@ -416,9 +504,11 @@ class CombatController extends Notifier<CombatSession?> {
         attacksUsed: attacks,
         lastRoll: roll,
         lastDamage: damage,
-        attackTimesDiceUsed: useAttackTimesDice,
+        attackTimesDiceUsed: timesDice,
         damageTaken: session.damageTaken + counter,
         playerHp: playerHp,
+        superAttackResult: superResult,
+        damageSeq: damage > 0 ? session.damageSeq + 1 : session.damageSeq,
       );
       return;
     }
@@ -471,6 +561,8 @@ class CombatController extends Notifier<CombatSession?> {
           playerEliminated: outcome.playerEliminated,
           playerHp: outcome.playerHp,
           levelsGained: levelAfter - session.playerStartLevel,
+          superAttackResult: superResult,
+          damageSeq: damage > 0 ? session.damageSeq + 1 : session.damageSeq,
         );
         return;
       }
@@ -487,6 +579,8 @@ class CombatController extends Notifier<CombatSession?> {
             damageTaken: session.damageTaken + counter,
             playerHp: 1,
             deathPrevented: true,
+            superAttackResult: superResult,
+            damageSeq: damage > 0 ? session.damageSeq + 1 : session.damageSeq,
           );
           return;
         }
@@ -503,6 +597,8 @@ class CombatController extends Notifier<CombatSession?> {
           finished: true,
           victory: false,
           playerEliminated: true,
+          superAttackResult: superResult,
+          damageSeq: damage > 0 ? session.damageSeq + 1 : session.damageSeq,
         );
         return;
       }
@@ -512,9 +608,11 @@ class CombatController extends Notifier<CombatSession?> {
         attacksUsed: attacks,
         lastRoll: roll,
         lastDamage: damage,
-        attackTimesDiceUsed: useAttackTimesDice,
+        attackTimesDiceUsed: timesDice,
         damageTaken: session.damageTaken + counter,
         playerHp: playerHp,
+        superAttackResult: superResult,
+        damageSeq: damage > 0 ? session.damageSeq + 1 : session.damageSeq,
       );
       return;
     }
@@ -546,13 +644,14 @@ class CombatController extends Notifier<CombatSession?> {
               : 0);
     }
 
-    // Riposte du défenseur : ATK totale, sans critique (GDD §13).
+    // Riposte du défenseur : ATK totale ±10 %, sans critique (GDD §13 —
+    // même plage aléatoire que toutes les attaques de joueurs, 10/10).
     int attackerHp = session.playerHp;
     int counter = 0;
     bool attackerEliminated = false;
     bool deathPrevented = defenderSaved;
     if (!eliminated) {
-      counter = session.defenderAttackTotal;
+      counter = _combat.rollPlayerAttack(session.defenderAttackTotal);
       if (game.activePlayer.hasDamageDivider) {
         counter = (counter / 2).ceil();
       }
@@ -587,7 +686,7 @@ class CombatController extends Notifier<CombatSession?> {
       defenderHpRemaining: defenderDown ? (defenderSaved ? 1 : 0) : max(hp, 0),
       lastRoll: roll,
       lastDamage: damage,
-      attackTimesDiceUsed: useAttackTimesDice,
+      attackTimesDiceUsed: timesDice,
       damageTaken: session.damageTaken + counter,
       finished: true,
       victory: eliminated,
@@ -597,6 +696,8 @@ class CombatController extends Notifier<CombatSession?> {
       xpGained: xp,
       deathPrevented: deathPrevented,
       levelsGained: levelAfter - session.playerStartLevel,
+      superAttackResult: superResult,
+      damageSeq: damage > 0 ? session.damageSeq + 1 : session.damageSeq,
     );
   }
 

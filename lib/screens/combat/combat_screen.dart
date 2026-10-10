@@ -165,6 +165,35 @@ class _CombatScreenState extends ConsumerState<CombatScreen> {
                             .read(combatControllerProvider.notifier)
                             .attack(useAttackTimesDice: true);
                       },
+                      // SUPER ATTAQUE (retours playtest 10/10) : une par
+                      // combat, 3× ±10 % ou loupée à 50 % — grisée pendant
+                      // la recharge de 5 tours du jeu (bouton actif →
+                      // message « En recharge »).
+                      superAttackAvailable: !session.finished &&
+                          !session.superAttackUsed &&
+                          game.turn >= active.superAttackReadyTurn,
+                      superAttackUsedThisCombat: session.superAttackUsed,
+                      superAttackCooldownLeft:
+                          active.superAttackReadyTurn > game.turn
+                              ? active.superAttackReadyTurn - game.turn
+                              : 0,
+                      onSuperAttack: () {
+                        ref
+                            .read(combatControllerProvider.notifier)
+                            .superAttack();
+                        // SFX selon le résultat : « Bim ! » ou « Loupé... ».
+                        final CombatSession? after =
+                            ref.read(combatControllerProvider);
+                        if (after?.superAttackResult == 1) {
+                          ref
+                              .read(soundControllerProvider)
+                              .playSfx('super_attaque/reussie');
+                        } else if (after?.superAttackResult == 2) {
+                          ref
+                              .read(soundControllerProvider)
+                              .playSfx('super_attaque/ratee');
+                        }
+                      },
                       // Fuite possible contre un monstre ou un boss
                       // (GDD §10, Sprint 5) — pas en JvJ.
                       onFlee: session.kind != CombatKind.player
@@ -173,7 +202,13 @@ class _CombatScreenState extends ConsumerState<CombatScreen> {
                           : null,
                     ),
                     const SizedBox(width: 10),
+                    // Popup « -N » (retours playtest 10/10) : chaque dégât
+                    // infligé par le joueur s'affiche ~0,55 s sur la carte
+                    // de la CIBLE (compteur damageSeq de la session).
                     Expanded(
+                      child: _DamagePopLayer(
+                        damage: session.lastDamage,
+                        seq: session.damageSeq,
                         child: switch (session.kind) {
                       CombatKind.monster when session.monster2 != null =>
                         Row(
@@ -215,7 +250,9 @@ class _CombatScreenState extends ConsumerState<CombatScreen> {
                               name: session.defenderName ?? '',
                               color: AppColors.danger),
                         ),
-                    }),
+                      },
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -235,6 +272,13 @@ class _CenterPanel extends StatelessWidget {
   final CombatSession session;
   final bool rolling;
   final VoidCallback onAttack;
+
+  /// SUPER ATTAQUE (retours playtest 10/10) : callback, disponibilité
+  /// (false = grisée) et contexte d'affichage du message « En recharge ».
+  final VoidCallback? onSuperAttack;
+  final bool superAttackAvailable;
+  final bool superAttackUsedThisCombat;
+  final int superAttackCooldownLeft;
 
   /// Soutien « attaque ×dé » disponible (usage unique — retours playtest).
   final bool hasAttackTimesDice;
@@ -258,6 +302,10 @@ class _CenterPanel extends StatelessWidget {
     required this.onAttack,
     this.hasAttackTimesDice = false,
     this.onAttackTimesDice,
+    this.onSuperAttack,
+    this.superAttackAvailable = false,
+    this.superAttackUsedThisCombat = false,
+    this.superAttackCooldownLeft = 0,
     this.onFlee,
     this.onReturn,
     this.onEndGame,
@@ -283,15 +331,29 @@ class _CenterPanel extends StatelessWidget {
           if (session.lastRoll != null)
             Text('Dé : ${session.lastRoll}',
                 style: textTheme.titleMedium?.copyWith(color: AppColors.gold)),
-          if (CombatService.isCritical(session.lastRoll ?? 0,
-              critOn5: session.critOn5))
+          // Ces messages décrivent la dernière action CLASSIQUE : ils
+          // s'effacent après une super attaque (10/10).
+          if (session.superAttackResult == 0 &&
+              CombatService.isCritical(session.lastRoll ?? 0,
+                  critOn5: session.critOn5))
             Text('Critique !',
                 style: textTheme.titleLarge?.copyWith(
                     color: AppColors.danger, fontWeight: FontWeight.w800)),
-          if (session.attackTimesDiceUsed)
+          if (session.superAttackResult == 0 && session.attackTimesDiceUsed)
             Text('Attaque ×${session.lastRoll} !',
                 style: textTheme.titleMedium?.copyWith(
                     color: AppColors.gold, fontWeight: FontWeight.w800)),
+          // SUPER ATTAQUE (10/10) : résultat de la dernière action.
+          if (session.superAttackResult == 1)
+            Text('💥 Bim !',
+                style: textTheme.titleLarge?.copyWith(
+                    color: AppColors.moveHighlight,
+                    fontWeight: FontWeight.w900)),
+          if (session.superAttackResult == 2)
+            Text('💨 Loupé...',
+                style: textTheme.titleLarge?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w800)),
           if (session.lastDamage > 0)
             Text('-${session.lastDamage} PV',
                 style: textTheme.titleMedium
@@ -302,6 +364,16 @@ class _CenterPanel extends StatelessWidget {
               onPressed: onAttack,
               child: const Text('Lancer le dé'),
             ),
+            // SUPER ATTAQUE : entre « Lancer le dé » et « Fuir ».
+            if (onSuperAttack != null) ...<Widget>[
+              const SizedBox(height: 8),
+              _SuperAttackButton(
+                available: superAttackAvailable,
+                usedThisCombat: superAttackUsedThisCombat,
+                cooldownLeft: superAttackCooldownLeft,
+                onPressed: onSuperAttack!,
+              ),
+            ],
             if (hasAttackTimesDice && onAttackTimesDice != null) ...<Widget>[
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -684,6 +756,142 @@ class _Stat extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.w700)),
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SUPER ATTAQUE (retours playtest 10/10) : bouton grisable avec message
+// « En recharge » — et popup « -N » des dégâts infligés (~0,55 s).
+// ---------------------------------------------------------------------------
+
+/// Bouton « Super attaque ». Disponible → action normale. En recharge ou
+/// déjà utilisée ce combat → style GRISe mais tap actif : un petit
+/// message explique pourquoi (« En recharge — réutilisable dans N tours »
+/// ou « Déjà utilisée ce combat »).
+class _SuperAttackButton extends StatelessWidget {
+  const _SuperAttackButton({
+    required this.available,
+    required this.usedThisCombat,
+    required this.cooldownLeft,
+    required this.onPressed,
+  });
+
+  final bool available;
+  final bool usedThisCombat;
+  final int cooldownLeft;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color foreground =
+        available ? AppColors.gold : AppColors.textSecondary;
+    final String label = !available
+        ? (usedThisCombat
+            ? 'Super attaque ✓'
+            : 'Super attaque ($cooldownLeft)')
+        : 'Super attaque';
+    return OutlinedButton.icon(
+      icon: Icon(Icons.flash_on, size: 18, color: foreground),
+      label: Text(label, overflow: TextOverflow.ellipsis),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: foreground,
+        side: BorderSide(color: foreground.withValues(alpha: 0.6)),
+      ),
+      onPressed: () {
+        if (available) {
+          onPressed();
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(usedThisCombat
+                ? 'Super attaque déjà utilisée ce combat.'
+                : 'Super attaque en recharge — réutilisable dans '
+                    '$cooldownLeft tour${cooldownLeft > 1 ? 's' : ''}.'),
+            duration: const Duration(milliseconds: 1600),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Calque posé sur la carte de la cible : affiche le popup « -N » à chaque
+/// NOUVEAU dégât infligé par le joueur actif. Le compteur [seq] (damageSeq
+/// de la session) sert de clé : chaque incrément REJOUE l'animation.
+class _DamagePopLayer extends StatelessWidget {
+  const _DamagePopLayer({
+    required this.damage,
+    required this.seq,
+    required this.child,
+  });
+
+  final int damage;
+  final int seq;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        child,
+        if (damage > 0)
+          IgnorePointer(
+            child: Center(
+              child: _DamagePop(key: ValueKey<int>(seq), damage: damage),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Le « -N » lui-même : monte et s'estompe en ~0,55 s.
+class _DamagePop extends StatefulWidget {
+  const _DamagePop({super.key, required this.damage});
+
+  final int damage;
+
+  @override
+  State<_DamagePop> createState() => _DamagePopState();
+}
+
+class _DamagePopState extends State<_DamagePop>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 550),
+  )..forward();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (BuildContext context, Widget? child) {
+        final double t =
+            Curves.easeOut.transform(_controller.value.clamp(0.0, 1.0));
+        return Opacity(
+          opacity: 1.0 - t,
+          child: Transform.translate(
+            offset: Offset(0, -48 * t),
+            child: Text(
+              '-${widget.damage}',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: AppColors.moveHighlight,
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

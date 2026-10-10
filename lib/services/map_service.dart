@@ -21,7 +21,7 @@ class MapService {
   /// Sel du RNG dédié à l'ancre de PATAPUCHE : la génération du plateau
   /// (protection du blocage) et `patapucheAnchorFor` DOIVENT tirer la même
   /// position — une seule constante pour éviter toute divergence (fix
-  /// 28/09 : 0x9A7B10 ici vs 0x9A7B1E dans l'accesseur, l'ancre renvoyée
+  /// 10/10 : 0x9A7B10 ici vs 0x9A7B1E dans l'accesseur, l'ancre renvoyée
   /// n'était pas la case protégée).
   static const int _patapucheAnchorSalt = 0x9A7B10;
 

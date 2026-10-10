@@ -185,4 +185,81 @@ void main() {
     expect(find.text('Tour 1'), findsOneWidget,
         reason: 'de retour sur le plateau');
   });
+
+  testWidgets('SUPER ATTAQUE (10/10) : bouton entre « Lancer le dé » et '
+      '« Fuir », résultat « Bim ! » ou « Loupé... »', (WidgetTester tester) async {
+    _StubGameController.fixedState = _fixedState();
+    _StubCombatController.fixedSession = _session();
+    await tester.pumpWidget(_app());
+    await tester.pump(const Duration(seconds: 2));
+    appRouter.go('/combat');
+    await tester.pump();
+    await tester.pump();
+
+    // Les trois boutons, dans cet ordre vertical.
+    final double rollTop =
+        tester.getTopLeft(find.text('Lancer le dé')).dy;
+    final double superTop =
+        tester.getTopLeft(find.text('Super attaque')).dy;
+    final double fleeTop = tester.getTopLeft(find.text('Fuir')).dy;
+    expect(rollTop, lessThan(superTop));
+    expect(superTop, lessThan(fleeTop));
+
+    // Utilisation : un des deux messages s'affiche, le bouton passe à ✓.
+    await tester.tap(find.text('Super attaque'));
+    await tester.pump();
+    expect(
+      find.text('💥 Bim !').evaluate().isNotEmpty ||
+          find.text('💨 Loupé...').evaluate().isNotEmpty,
+      isTrue,
+      reason: 'la super attaque réussit (« Bim ! ») ou échoue (« Loupé... »)',
+    );
+    expect(find.text('Super attaque ✓'), findsOneWidget,
+        reason: 'une seule utilisation par combat');
+  });
+
+  testWidgets('SUPER ATTAQUE en recharge : bouton grisé + message',
+      (WidgetTester tester) async {
+    final GameState state = _fixedState();
+    state.players[0] =
+        state.players[0].copyWith(superAttackReadyTurn: 9);
+    _StubGameController.fixedState = state;
+    _StubCombatController.fixedSession = _session();
+    await tester.pumpWidget(_app());
+    await tester.pump(const Duration(seconds: 2));
+    appRouter.go('/combat');
+    await tester.pump();
+    await tester.pump();
+
+    // Grisée : le libellé porte la recharge restante (8 tours).
+    await tester.tap(find.text('Super attaque (8)'));
+    await tester.pump();
+    expect(find.textContaining('réutilisable dans 8 tours'), findsOneWidget,
+        reason: 'message « En recharge » au tap sur le bouton grisé');
+  });
+
+  testWidgets('popup « -N » : les dégâts infligés s\'affichent sur la cible',
+      (WidgetTester tester) async {
+    _StubGameController.fixedState = _fixedState();
+    _StubCombatController.fixedSession = _session();
+    await tester.pumpWidget(_app());
+    await tester.pump(const Duration(seconds: 2));
+    appRouter.go('/combat');
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.text('Lancer le dé'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    // Le popup est un Text exact « -N » (le panneau central affiche « -N PV »).
+    expect(
+      find
+          .byWidgetPredicate(
+              (Widget w) => w is Text && RegExp(r'^-\d+$').hasMatch(w.data ?? ''))
+          .evaluate()
+          .isNotEmpty,
+      isTrue,
+      reason: 'le popup « -N » est visible ~0,55 s après l\'attaque',
+    );
+  });
 }

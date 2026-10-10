@@ -179,7 +179,7 @@ void main() {
     });
   });
 
-  group('Apparition au premier N2 — depuis une vraie partie (fix 28/09)', () {
+  group('Apparition au premier N2 — depuis une vraie partie (fix 10/10)', () {
     test('createNewGame ne crée PAS Patapuche : elle attend le premier N2',
         () async {
       final ProviderContainer container = _container(5);
@@ -198,7 +198,7 @@ void main() {
         ],
       ));
 
-      // Fix 28/09 : Patapuche était créée dès le départ → _maybeSpawn
+      // Fix 10/10 : Patapuche était créée dès le départ → _maybeSpawn
       // partait aussitôt (patapuche != null) et l'annonce « Patapuche
       // apparaît » ne s'affichait JAMAIS.
       expect(created.patapuche, isNull,

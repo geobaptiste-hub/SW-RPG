@@ -40,6 +40,7 @@ flutter:
     - assets/audio/music/planetes/
     - assets/audio/music/preparation/
     - assets/audio/sfx/
+    - assets/audio/sfx/super_attaque/
     - assets/images/allies/
     - assets/images/allies/healers/
     - assets/images/allies/nukers/

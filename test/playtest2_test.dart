@@ -180,10 +180,17 @@ void main() {
       expect(CombatService.isCritical(5), isFalse);
       expect(CombatService.isCritical(5, critOn5: true), isTrue);
       expect(CombatService.isCritical(6, critOn5: false), isTrue);
-      expect(
-        CombatService.attackDamage(attackTotal: 450, roll: 5, critOn5: true),
-        900,
-      );
+      // 10/10 : dégâts = valeur tirée ±10 %, doublée en critique →
+      // ATK 450 → tirage 405-495, critique 810-990.
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final CombatService combat = container.read(combatServiceProvider);
+      for (int i = 0; i < 100; i++) {
+        expect(
+          combat.attackDamage(attackTotal: 450, roll: 5, critOn5: true),
+          inInclusiveRange(810, 990),
+        );
+      }
     });
   });
 
@@ -406,9 +413,17 @@ void main() {
       final CombatSession session = container.read(combatControllerProvider)!;
       expect(session.finished, isTrue);
       expect(session.targetEliminated, isFalse);
-      expect(session.damageTaken, defender.totalAttack,
+      // 10/10 : la riposte du défenseur est aussi ±10 % (ATK totale).
+      expect(
+          session.damageTaken,
+          inInclusiveRange((defender.totalAttack * 0.9).floor(),
+              (defender.totalAttack * 1.1).floor()),
           reason: 'l attaquant subit la riposte du défenseur');
-      expect(session.playerHp, 1000 - defender.totalAttack);
+      expect(
+          session.playerHp,
+          inInclusiveRange(
+              1000 - (defender.totalAttack * 1.1).floor(),
+              1000 - (defender.totalAttack * 0.9).floor()));
     });
 
     test('défenseur éliminé : pas de riposte, +500 XP à l attaquant', () {
@@ -483,9 +498,12 @@ void main() {
       expect(loss, (session.lastDamage / 2).ceil(),
           reason: 'le tank du défenseur divise les dégâts reçus '
               '(plafond arrondi au supérieur)');
-      expect(after.players[0].hp, 3000 - session.defenderAttackTotal,
+      expect(after.players[0].hp,
+          inInclusiveRange(3000 - session.defenderAttackTotal * 11 ~/ 10,
+              3000 - session.defenderAttackTotal * 9 ~/ 10),
           reason: 'l attaquant ne subit que la riposte du défenseur '
-              '(sans division : son tank ne joue pas ici)');
+              '(sans division : son tank ne joue pas ici — riposte ±10 %, '
+              '10/10)');
     });
 
     test('attaquant éliminé par la riposte : +500 XP au défenseur', () {
