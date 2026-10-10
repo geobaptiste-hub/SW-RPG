@@ -8,6 +8,7 @@ import 'package:star_wars_rpg/models/game_state.dart';
 import 'package:star_wars_rpg/models/planet.dart';
 import 'package:star_wars_rpg/models/tile.dart';
 import 'package:star_wars_rpg/services/game_service.dart';
+import 'package:star_wars_rpg/services/map_service.dart';
 import 'package:star_wars_rpg/services/save_service.dart';
 
 /// SaveService de test : aucune écriture Hive réelle (path_provider est
@@ -122,7 +123,17 @@ void main() {
       final GameState rolled = container.read(gameControllerProvider)!;
       expect(rolled.movementPointsRemaining, greaterThan(0));
 
-      final List<Position> targets = controller.validMoveTargets();
+      // On évite la porte de TÉLÉPORTATION : ancrée aléatoirement par la
+      // graine (elle-même aléatoire à chaque exécution), elle peut tomber
+      // pile sur un voisin du départ et téléporter le pion (test flaky).
+      final MapService mapService = MapService();
+      final GameState created = container.read(gameControllerProvider)!;
+      final Position? teleportDoor =
+          mapService.teleportAnchorFor(created.seed);
+      final List<Position> targets = controller
+          .validMoveTargets()
+          .where((Position p) => p != teleportDoor)
+          .toList();
       expect(targets, isNotEmpty,
           reason: 'Un départ connecté a au moins un voisin libre');
       final Position target = targets.first;

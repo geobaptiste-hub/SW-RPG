@@ -9,6 +9,7 @@ import 'package:star_wars_rpg/main.dart';
 import 'package:star_wars_rpg/models/game_state.dart';
 import 'package:star_wars_rpg/models/planet.dart';
 import 'package:star_wars_rpg/models/player.dart';
+import 'package:star_wars_rpg/models/teleport_portal.dart';
 import 'package:star_wars_rpg/models/tile.dart';
 import 'package:star_wars_rpg/services/game_service.dart';
 import 'package:star_wars_rpg/services/map_service.dart';
@@ -171,5 +172,97 @@ void main() {
     await tester.pump();
     expect(find.text('Vue Galaxie'), findsOneWidget);
     expect(find.text('Vue Joueur'), findsNothing);
+  });
+
+  // État commun aux tests du téléporteur : joueur actif posé À CÔTÉ de la
+  // porte (case révélée), porte non consommée par défaut.
+  GameState teleportState({required TeleportPortal teleport}) {
+    final MapService mapService = MapService();
+    final Planet planet =
+        mapService.generateStartPlanet(PlanetType.alderande, seed: 7);
+    final Position door = mapService.teleportAnchorFor(7)!;
+    final Position from = mapService
+        .neighborPositions(door, planet)
+        .firstWhere((Position p) => planet.isWalkableAt(p.x, p.y));
+    final Player player = Player(
+      id: 'p1',
+      name: 'Luke Skywalker',
+      faction: Faction.rebel,
+      position: from,
+      planet: PlanetType.alderande,
+      level: 1,
+      xp: 0,
+      attack: 125,
+      hp: 200,
+      maxHp: 200,
+    );
+    final GameState state = GameState(
+      schemaVersion: GameState.currentSchemaVersion,
+      gameId: 'test_teleport_logo',
+      seed: 7,
+      mode: GameMode.chacunPourSoi,
+      teamSize: 0,
+      planetType: PlanetType.alderande,
+      currentPlanet: planet,
+      players: <Player>[player],
+      turn: 1,
+      currentPlayerIndex: 0,
+      gameTimeSeconds: 0,
+      movementPointsRemaining: 0,
+      lastDiceRoll: null,
+      bosses: const [],
+      portals: const [],
+      teleport: teleport,
+      status: GameStatus.inProgress,
+    );
+    return state.copyWith(
+      currentPlanet: mapService.revealFogAround(planet, from),
+    );
+  }
+
+  // Médaillon du portail : image `teleport/portail` résolue depuis le
+  // disque en test (FileImage), ou icône de repli flash_on taille 20 si
+  // le fichier manque (l'icône flash_on taille 14 du HUD ATK n'est pas
+  // le médaillon).
+  final Finder portailMedallion = find.byWidgetPredicate((Widget w) =>
+      (w is Image && w.image.toString().contains('teleport')) ||
+      (w is Icon && w.icon == Icons.flash_on && w.size == 20));
+
+  testWidgets('téléporteur (fix 10/10) : logo jaune avant la première '
+      'utilisation', (WidgetTester tester) async {
+    final Position door = MapService().teleportAnchorFor(7)!;
+    _StubGameController.fixedState = teleportState(
+        teleport: TeleportPortal(planet: PlanetType.alderande, position: door));
+
+    await openBoard(tester);
+    expect(find.byIcon(Icons.flare), findsOneWidget,
+        reason: 'la porte de téléportation porte le logo jaune dès qu\'elle '
+            'est visible (elle était invisible avant le fix)');
+    expect(portailMedallion, findsNothing,
+        reason: 'pas encore d\'image de portail avant la 1re utilisation');
+  });
+
+  testWidgets('téléporteur : après la première utilisation, le médaillon '
+      'remplace le logo', (WidgetTester tester) async {
+    final Position door = MapService().teleportAnchorFor(7)!;
+    final Planet planet =
+        MapService().generateStartPlanet(PlanetType.alderande, seed: 7);
+    final Position from = MapService()
+        .neighborPositions(door, planet)
+        .firstWhere((Position p) => planet.isWalkableAt(p.x, p.y));
+    _StubGameController.fixedState = teleportState(
+      teleport: TeleportPortal(
+        planet: PlanetType.alderande,
+        position: door,
+        position2: from,
+        visited: true,
+      ),
+    );
+
+    await openBoard(tester);
+    expect(find.byIcon(Icons.flare), findsNothing,
+        reason: 'le logo jaune disparaît après la 1re utilisation');
+    expect(portailMedallion, findsWidgets,
+        reason: 'médaillon du portail sur les cases du couple utilisé');
   });
 }

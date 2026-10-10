@@ -1410,8 +1410,8 @@ void main() {
           reason: 'aller-retour : retour sur la porte d’origine');
     });
 
-    test('avant la première utilisation, le portail reste invisible '
-        '(visited = false)', () {
+    test('avant la première utilisation : visited = false (logo jaune au '
+        'plateau, pas d’image)', () {
       final Planet planet =
           mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
       final Position door = mapService.teleportAnchorFor(42)!;
@@ -1425,7 +1425,8 @@ void main() {
             planet: PlanetType.hoth, position: door),
       );
       expect(state.teleport!.visited, isFalse,
-          reason: 'pas de logo avant la première utilisation');
+          reason: 'le couple n’est pas encore ouvert (fix 10/10 : la porte '
+              'porte le logo jaune, l’image vient après la 1re utilisation)');
     });
 
     test('depuis une VRAIE partie créée : marcher sur la porte téléporte, '

@@ -70,8 +70,9 @@ class BoardWidget extends StatefulWidget {
   /// ensuite — masqués par le brouillard comme le reste.
   final CantinaZone? cantina;
 
-  /// La CASE DE TÉLÉPORTATION (retours playtest 20/09) : invisible avant
-  /// la première utilisation, puis image du portail sur la case.
+  /// La CASE DE TÉLÉPORTATION (retours playtest 20/09) : petit logo jaune
+  /// avant la première utilisation (comme la cantina — fix 10/10), puis
+  /// image du portail sur les deux cases du couple.
   final TeleportPortal? teleport;
 
   /// PATAPUCHE (retours playtest 20/09) : le pion se déplace sur la
@@ -558,13 +559,31 @@ class _BoardWidgetState extends State<BoardWidget>
                   ),
                 ),
               // TÉLÉPORTATION (retours playtest 20/09, v2
-              // bidirectionnelle) : une fois le couple ouvert, l'image du
-              // portail déposée (`assets/images/teleport/portail.jpg|png`)
-              // s'affiche sur LES DEUX cases (porte d'origine + case
-              // d'arrivée) quand elles sont visibles. Multiplateforme
-              // (providerFor). Avant la première utilisation : la case de
-              // téléportation est INVISIBLE (aucun logo — il faut marcher
-              // dessus pour la découvrir).
+              // bidirectionnelle) : AVANT la première utilisation, la
+              // porte porte le petit LOGO JAUNE (identique cantina et
+              // portails — fix 10/10 : invisible, elle n'était trouvée que
+              // dans ~31 % des parties même à exploration maximale). APRÈS
+              // la première utilisation, l'image du portail déposée
+              // (`assets/images/teleport/portail.jpg|png`) s'affiche sur
+              // LES DEUX cases (porte d'origine + case d'arrivée) quand
+              // elles sont visibles. Multiplateforme (providerFor).
+              if (widget.teleport != null &&
+                  !widget.teleport!.visited &&
+                  widget.teleport!.planet == widget.planet.type &&
+                  (widget.planet
+                          .tileAtOrNull(widget.teleport!.position.x,
+                              widget.teleport!.position.y)
+                          ?.visible ??
+                      false))
+                _marker(
+                  widget.teleport!.position,
+                  const Icon(Icons.flare,
+                      size: 26,
+                      color: AppColors.gold,
+                      shadows: <Shadow>[
+                        Shadow(color: AppColors.gold, blurRadius: 10),
+                      ]),
+                ),
               for (final Position portalCase in <Position>[
                 if (widget.teleport != null && widget.teleport!.visited)
                   widget.teleport!.position,
