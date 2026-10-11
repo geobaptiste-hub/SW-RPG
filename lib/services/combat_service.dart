@@ -380,7 +380,11 @@ class CombatController extends Notifier<CombatSession?> {
     if (session.superAttackUsed) return; // une seule par combat
     if (game.turn < game.activePlayer.superAttackReadyTurn) return; // recharge
 
-    final bool hit = _combat.rollSuperAttackHit();
+    // SUPER ATTAQUE INRATABLE (retours playtest 11/10) : le joueur a
+    // marché sur la case du Faucon Millénium → plus aucune chance de
+    // loupé jusqu'à la fin de la partie.
+    final bool hit = game.activePlayer.superAttackGuaranteed ||
+        _combat.rollSuperAttackHit();
     final int damage =
         hit ? 3 * _combat.rollPlayerAttack(session.playerAttackTotal) : 0;
     _game.useSuperAttack();

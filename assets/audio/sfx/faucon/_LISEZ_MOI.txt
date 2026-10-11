@@ -1,0 +1,9 @@
+Déposez ici le son de la CASE DU FAUCON MILLÉNIUM — joué quand un
+joueur marche sur la case du haut-milieu (bonus super attaque), à
+CHAQUE fois (première visite comme suivantes). Sans recompilation sur
+desktop (le web exige un commit + push). MP3 conseillé (wav/ogg
+acceptés sur desktop ; web : mp3 uniquement). Nom attendu :
+
+  huuu.mp3  — le rugissement (« Huuuuuuw ! ») de la case bonus.
+
+Si le fichier manque : pas de son (aucune erreur).

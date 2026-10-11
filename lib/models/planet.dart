@@ -2,9 +2,10 @@ import '../core/utils/json_utils.dart';
 import 'tile.dart';
 
 /// Types de planètes : 5 planètes de départ + 4 planètes secondaires
-/// accessibles par portail (GDD §4) + la CANTINA (mini-zone 3x3 —
-/// retours playtest 19/09). `cantina` est en DERNIER pour ne pas
-/// déplacer les index des planètes existantes (utilisés dans les seeds).
+/// accessibles par portail (GDD §4) + la CANTINA et le FAUCON MILLÉNIUM
+/// (mini-zones 3x3 — retours playtest 19/09 et 11/10). Les deux dernières
+/// valeurs sont en DERNIER pour ne pas déplacer les index des planètes
+/// existantes (utilisés dans les seeds).
 enum PlanetType {
   coruscant,
   alderande,
@@ -16,6 +17,7 @@ enum PlanetType {
   etoileNoire,
   dagobah,
   cantina,
+  faucon,
 }
 
 /// Une planète : son nom, ses dimensions et l'ensemble de ses cases

@@ -1,0 +1,14 @@
+Déposez ici les images du FAUCON MILLÉNIUM — sans recompilation sur
+desktop (le web exige un commit + push). PNG ou JPG acceptés.
+Noms attendus :
+
+  portail.jpg / .png    — médaillon affiché sur la CASE-PORTAIL du
+                          Faucon (planète principale) après la première
+                          entrée (avant : petit logo jaune). Carré
+                          conseillé (~256x256).
+  interieur.jpg / .png  — image affichée DANS le vaisseau, sur la case
+                          du HAUT-MILIEU (celle du bonus super attaque).
+                          Format carré conseillé (elle couvre la case).
+
+Sans images : médaillon doré avec une fusée (porte) et case blanche
+simple (intérieur) — aucune erreur.

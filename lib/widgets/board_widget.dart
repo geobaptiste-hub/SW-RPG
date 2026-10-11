@@ -7,6 +7,7 @@ import '../core/constants/planet_constants.dart' show PlanetConstants;
 import '../core/theme/app_theme.dart';
 import '../models/boss.dart';
 import '../models/cantina_zone.dart';
+import '../models/falcon_zone.dart';
 import '../models/planet.dart';
 import '../models/patapuche.dart';
 import '../models/teleport_portal.dart';
@@ -70,6 +71,11 @@ class BoardWidget extends StatefulWidget {
   /// ensuite — masqués par le brouillard comme le reste.
   final CantinaZone? cantina;
 
+  /// Le FAUCON MILLÉNIUM (retours playtest 11/10) : logo jaune sur la
+  /// case-portail tant que personne n'y est entré, médaillon ensuite ;
+  /// dans la zone, l'image déposée couvre la case du haut-milieu.
+  final FalconZone? falcon;
+
   /// La CASE DE TÉLÉPORTATION (retours playtest 20/09) : petit logo jaune
   /// avant la première utilisation (comme la cantina — fix 10/10), puis
   /// image du portail sur les deux cases du couple.
@@ -96,6 +102,7 @@ class BoardWidget extends StatefulWidget {
     this.bosses = const [],
     this.portals = const [],
     this.cantina,
+    this.falcon,
     this.teleport,
     this.patapuche,
     this.moveTargets = const {},
@@ -501,6 +508,97 @@ class _BoardWidgetState extends State<BoardWidget>
                         }),
                       ),
                     ),
+              // FAUCON MILLÉNIUM — PORTE (retours playtest 11/10) : logo
+              // jaune (identique cantina et portails) tant que personne
+              // n'y est entré, médaillon avec l'image déposée
+              // (`assets/images/faucon/portail.jpg|png`) ensuite.
+              if (widget.falcon != null &&
+                  widget.falcon!.planet == widget.planet.type &&
+                  (widget.planet
+                          .tileAtOrNull(widget.falcon!.anchor.x,
+                              widget.falcon!.anchor.y)
+                          ?.visible ??
+                      false))
+                _marker(
+                  widget.falcon!.anchor,
+                  Consumer(builder:
+                      (BuildContext context, WidgetRef ref, Widget? _) {
+                    final ImageProvider? logo = widget.falcon!.visited
+                        ? ref
+                            .watch(imageServiceProvider)
+                            .providerFor('faucon', 'portail')
+                        : null;
+                    if (widget.falcon!.visited) {
+                      return Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.background,
+                          border: Border.all(
+                              color: AppColors.gold, width: 1.5),
+                          boxShadow: const [
+                            BoxShadow(
+                                color: Colors.black45, blurRadius: 4),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: logo == null
+                              ? const Icon(Icons.rocket_launch,
+                                  size: 20, color: AppColors.gold)
+                              : Image(image: logo,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (BuildContext context,
+                                          Object error,
+                                          StackTrace? stackTrace) =>
+                                      const Icon(Icons.rocket_launch,
+                                          size: 20,
+                                          color: AppColors.gold)),
+                        ),
+                      );
+                    }
+                    return const Icon(Icons.flare,
+                        size: 26,
+                        color: AppColors.gold,
+                        shadows: <Shadow>[
+                          Shadow(color: AppColors.gold, blurRadius: 10),
+                        ]);
+                  }),
+                ),
+              // FAUCON MILLÉNIUM — INTÉRIEUR (retours playtest 11/10) :
+              // l'image déposée (`assets/images/faucon/interieur.jpg|png`)
+              // couvre LA case du haut-milieu (celle du bonus) une fois
+              // découverte — les 8 autres restent des cases blanches.
+              if (widget.planet.type == PlanetType.faucon)
+                if (widget.planet
+                        .tileAtOrNull(PlanetConstants.falconBonusPosition.x,
+                            PlanetConstants.falconBonusPosition.y)
+                        ?.discovered ??
+                    false)
+                  Positioned(
+                    left: PlanetConstants.falconBonusPosition.x *
+                        BoardConstants.tileExtent,
+                    top: PlanetConstants.falconBonusPosition.y *
+                        BoardConstants.tileExtent,
+                    width: BoardConstants.tileExtent,
+                    height: BoardConstants.tileExtent,
+                    child: IgnorePointer(
+                      child: Consumer(builder:
+                          (BuildContext context, WidgetRef ref, Widget? _) {
+                        final ImageProvider? interieur = ref
+                            .watch(imageServiceProvider)
+                            .providerFor('faucon', 'interieur');
+                        if (interieur == null) {
+                          return const SizedBox.shrink();
+                        }
+                        return Image(image: interieur,
+                            fit: BoxFit.cover,
+                            errorBuilder: (BuildContext context,
+                                    Object error, StackTrace? stackTrace) =>
+                                const SizedBox.shrink());
+                      }),
+                    ),
+                  ),
               // PATAPUCHE (retours playtest 20/09) : le pion (image
               // `assets/images/patapuche/pion.jpg|png`) se promène sur la
               // planète — visible quand sa case l'est, comme les boss.

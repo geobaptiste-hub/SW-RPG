@@ -25,6 +25,10 @@ class MapService {
   /// n'était pas la case protégée).
   static const int _patapucheAnchorSalt = 0x9A7B10;
 
+  /// Sel du RNG dédié à la porte du FAUCON MILLÉNIUM (mêmes exigences :
+  /// génération et accesseur tirent la même case).
+  static const int _falconDoorAnchorSalt = 0xFACADE;
+
   /// Génère la planète de départ : grille 15x15, 168 cases jouables,
   /// 57 cases bloquées, toutes les zones jouables connectées
   /// (GDD §3, CDC §5).
@@ -46,13 +50,21 @@ class MapService {
     // cachée, protégée du blocage, jamais sur les deux autres portes.
     final Position? patapucheAnchor = _pickPatapucheAnchor(
         Random(seed + _patapucheAnchorSalt), cantinaDoor, teleportDoor);
+    // La PORTE DU FAUCON MILLÉNIUM (retours playtest 11/10) : quatrième
+    // case cachée, protégée du blocage, jamais sur les trois autres.
+    final Position? falconDoor = _pickFalconDoorAnchor(
+        Random(seed + _falconDoorAnchorSalt),
+        cantinaDoor,
+        teleportDoor,
+        patapucheAnchor);
     // Nombre d'essais de sécurité : l'algorithme garantit la connectivité à
     // chaque pose de bloc, il aboutit statistiquement toujours.
     for (int attempt = 0; attempt < 200; attempt++) {
       final Planet? planet = _tryGeneratePlanet(
           type, rng, cantinaDoor,
           teleportDoor: teleportDoor,
-          patapucheAnchor: patapucheAnchor);
+          patapucheAnchor: patapucheAnchor,
+          falconDoor: falconDoor);
       if (planet != null) return planet;
     }
     throw StateError(
@@ -117,6 +129,63 @@ class MapService {
     return candidates[rng.nextInt(candidates.length)];
   }
 
+  /// Position de la PORTE du FAUCON MILLÉNIUM pour une graine :
+  /// déterministe, hors départs, jamais sur les trois autres cases
+  /// spéciales (retours playtest 11/10).
+  Position? falconDoorAnchorFor(int seed) => _pickFalconDoorAnchor(
+        Random(seed + _falconDoorAnchorSalt),
+        cantinaAnchorFor(seed),
+        teleportAnchorFor(seed),
+        patapucheAnchorFor(seed),
+      );
+
+  Position? _pickFalconDoorAnchor(
+      Random rng, Position? exclude1, Position? exclude2, Position? exclude3) {
+    final Set<Position> starts = BoardConstants.startPositions.toSet();
+    final List<Position> candidates = <Position>[
+      for (int y = 0; y < BoardConstants.gridHeight; y++)
+        for (int x = 0; x < BoardConstants.gridWidth; x++)
+          if (!starts.contains(Position(x, y)) &&
+              Position(x, y) != exclude1 &&
+              Position(x, y) != exclude2 &&
+              Position(x, y) != exclude3)
+            Position(x, y),
+    ];
+    if (candidates.isEmpty) return null;
+    return candidates[rng.nextInt(candidates.length)];
+  }
+
+  /// Le FAUCON MILLÉNIUM intérieur : mini-zone 3x3 INDÉPENDANTE, comme
+  /// la cantina (retours playtest 11/10). Les 9 cases sont MARCHABLES et
+  /// « blanches » SAUF celle du haut-milieu
+  /// ([PlanetConstants.falconBonusPosition]) où s'affiche l'image
+  /// déposée et où l'on gagne la super attaque inratable ; arrivée et
+  /// sortie = case (1,2) — [PlanetConstants.falconArrival]. Aucune
+  /// consommation (pas de cantinaDrink) ; le marqueur sanctuaire
+  /// `cantina` (réutilisé) interdit contenu et JvJ.
+  Planet generateFalconPlanet() {
+    final List<Tile> tiles = <Tile>[];
+    for (int y = 0; y < 3; y++) {
+      for (int x = 0; x < 3; x++) {
+        tiles.add(Tile(
+          x: x,
+          y: y,
+          walkable: true,
+          cantina: true,
+          cantinaEntrance: x == 1 && y == 2,
+        ));
+      }
+    }
+    return Planet(
+      name:
+          PlanetConstants.displayNames[PlanetType.faucon] ?? 'Faucon',
+      type: PlanetType.faucon,
+      width: 3,
+      height: 3,
+      tiles: tiles,
+    );
+  }
+
   /// La CANTINA intérieure : mini-zone 3x3 INDÉPENDANTE, comme une
   /// micro-planète (retours playtest 19/09 v2 — la case-portail de la
   /// planète principale y téléporte). Rangée du haut = bar en bois
@@ -152,6 +221,7 @@ class MapService {
     Position? cantinaDoor, {
     Position? teleportDoor,
     Position? patapucheAnchor,
+    Position? falconDoor,
   }) {
     final int width = BoardConstants.gridWidth;
     final int height = BoardConstants.gridHeight;
@@ -161,11 +231,13 @@ class MapService {
     final Set<Position> starts = BoardConstants.startPositions.toSet();
 
     // La PORTE de la cantina reste jouable (1 case protégée du blocage —
-    // retours playtest 19/09 v2).
+    // retours playtest 19/09 v2), ainsi que la porte de téléportation, la
+    // case de Patapuche et la porte du Faucon Millénium.
     final Set<Position> protected = <Position>{
       if (cantinaDoor != null) cantinaDoor,
       if (teleportDoor != null) teleportDoor,
       if (patapucheAnchor != null) patapucheAnchor,
+      if (falconDoor != null) falconDoor,
     };
 
     bool isBlocked(int x, int y) => blocked.contains(Position(x, y));
@@ -343,6 +415,7 @@ class MapService {
     Position? cantinaDoor,
     Position? teleportDoor,
     Position? patapuchePosition,
+    Position? falconDoor,
   }) {
     final Set<Position> starts = BoardConstants.startPositions.toSet();
     final List<Position> candidates = <Position>[];
@@ -353,12 +426,14 @@ class MapService {
           occupied.contains(position)) {
         continue;
       }
-      // Jamais de portail SUR la porte de la cantina ou de téléportation,
-      // ni DANS la cantina (retours playtest 19-20/09).
+      // Jamais de portail SUR la porte de la cantina, de téléportation ou
+      // du Faucon Millénium, ni DANS la cantina (retours playtest 19-20/09
+      // et 11/10).
       if (tile.cantina ||
           position == cantinaDoor ||
           position == teleportDoor ||
-          position == patapuchePosition) {
+          position == patapuchePosition ||
+          position == falconDoor) {
         continue;
       }
       if (tile.monster != null ||

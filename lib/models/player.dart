@@ -109,6 +109,11 @@ class Player {
   /// N » du plateau — recharge fixe, même si l'attaque est loupée).
   final int superAttackReadyTurn;
 
+  /// SUPER ATTAQUE INRATABLE (retours playtest 11/10) : le joueur a
+  /// marché sur la case du Faucon Millénium — plus aucune chance de
+  /// loupé (50 % → 100 % de réussite), jusqu'à la fin de la partie.
+  final bool superAttackGuaranteed;
+
   const Player({
     required this.id,
     required this.name,
@@ -132,6 +137,7 @@ class Player {
     this.patapucheAtkBonus = 0,
     this.patapucheHpBonus = 0,
     this.superAttackReadyTurn = 0,
+    this.superAttackGuaranteed = false,
     PlanetType? planet,
     this.returnPlanet,
     this.returnPosition,
@@ -294,6 +300,7 @@ class Player {
     int patapucheAtkBonusDelta = 0,
     int patapucheHpBonusDelta = 0,
     int? superAttackReadyTurn,
+    bool? superAttackGuaranteed,
     PlanetType? planet,
     PlanetType? returnPlanet,
     bool clearReturn = false,
@@ -325,6 +332,7 @@ class Player {
       patapucheHpBonus:
           patapucheHpBonus + patapucheHpBonusDelta,
       superAttackReadyTurn: superAttackReadyTurn ?? this.superAttackReadyTurn,
+      superAttackGuaranteed: superAttackGuaranteed ?? this.superAttackGuaranteed,
       planet: planet ?? this.planet,
       returnPlanet:
           clearReturn ? null : (returnPlanet ?? this.returnPlanet),
@@ -356,6 +364,7 @@ class Player {
         'patapucheAtkBonus': patapucheAtkBonus,
         'patapucheHpBonus': patapucheHpBonus,
         'superAttackReadyTurn': superAttackReadyTurn,
+        'superAttackGuaranteed': superAttackGuaranteed,
         'planet': enumToName(planet),
         if (returnPlanet != null) 'returnPlanet': enumToName(returnPlanet!),
         if (returnPosition != null)
@@ -398,6 +407,7 @@ class Player {
       patapucheHpBonus: (json['patapucheHpBonus'] as num?)?.toInt() ?? 0,
       superAttackReadyTurn:
           (json['superAttackReadyTurn'] as num?)?.toInt() ?? 0,
+      superAttackGuaranteed: json['superAttackGuaranteed'] as bool? ?? false,
       planet: enumFromName(
           PlanetType.values, json['planet'], PlanetConstants.startPlanets.first),
       returnPlanet: json['returnPlanet'] == null

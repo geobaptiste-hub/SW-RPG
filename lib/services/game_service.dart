@@ -19,6 +19,7 @@ import '../models/planet.dart';
 import '../models/player.dart';
 import '../models/portal.dart';
 import '../models/armor.dart';
+import '../models/falcon_zone.dart';
 import '../models/patapuche.dart';
 import '../models/teleport_portal.dart';
 import '../models/tile.dart';
@@ -86,6 +87,16 @@ enum MoveResult {
   /// Case de consommations de la CANTINA : PV remis au maximum (retours
   /// playtest 19/09).
   cantinaDrink,
+
+  /// Entrée dans le FAUCON MILLÉNIUM par sa case-portail (retours
+  /// playtest 11/10).
+  falconTravel,
+
+  /// Case du FAUCON : super attaque inratable gagnée (1re fois — 11/10).
+  falconBonus,
+
+  /// Case du FAUCON revisitée : message seul, aucun effet (11/10).
+  falconBonusAgain,
 }
 
 /// Phase de partie courante (GDD addendum §4.1) : pilote la distribution
@@ -252,10 +263,12 @@ class GameController extends Notifier<GameState?> {
     // La PORTE de la cantina est ancrée de façon déterministe par la seed
     // (une case de la planète principale qui sert de portail vers la
     // mini-zone 3x3 — retours playtest 19/09 v2). La CASE DE TÉLÉPORTATION
-    // est ancrée de la même façon (retours playtest 20/09).
+    // est ancrée de la même façon (retours playtest 20/09), ainsi que la
+    // PORTE DU FAUCON MILLÉNIUM (retours playtest 11/10).
     final Position? cantinaDoor = _mapService.cantinaAnchorFor(seed);
     final Position? teleportDoor = _mapService.teleportAnchorFor(seed);
     final Position? patapucheDoor = _mapService.patapucheAnchorFor(seed);
+    final Position? falconDoor = _mapService.falconDoorAnchorFor(seed);
 
     GameState state = GameState(
       schemaVersion: GameState.currentSchemaVersion,
@@ -277,6 +290,9 @@ class GameController extends Notifier<GameState?> {
       cantina: cantinaDoor == null
           ? null
           : CantinaZone(planet: config.planetType, anchor: cantinaDoor),
+      falcon: falconDoor == null
+          ? null
+          : FalconZone(planet: config.planetType, anchor: falconDoor),
       teleport: teleportDoor == null
           ? null
           : TeleportPortal(planet: config.planetType, position: teleportDoor),
@@ -303,10 +319,11 @@ class GameController extends Notifier<GameState?> {
       allyBiasPlayer: players[firstPlayerIndex],
       avoidPositions: <Position>{
         ..._bossPositions(state, planet.type),
-        // Aucun contenu tiré sur la porte de la cantina, de téléport, ni
-        // sur la case réservée à Patapuche (l'ancre seedée, même si elle
-        // n'apparaîtra qu'au premier niveau 2).
+        // Aucun contenu tiré sur la porte de la cantina, de téléport, du
+        // Faucon Millénium, ni sur la case réservée à Patapuche (l'ancre
+        // seedée, même si elle n'apparaîtra qu'au premier niveau 2).
         if (state.cantina != null) state.cantina!.anchor,
+        if (state.falcon != null) state.falcon!.anchor,
         if (state.teleport != null) state.teleport!.position,
         if (patapucheDoor != null) patapucheDoor,
       },
@@ -314,9 +331,11 @@ class GameController extends Notifier<GameState?> {
     final Map<PlanetType, Planet> planets = <PlanetType, Planet>{
       planet.type: populate.planet,
       // La mini-zone cantina 3x3 existe dès la création (retours playtest
-      // 19/09 v2).
+      // 19/09 v2), ainsi que le FAUCON MILLÉNIUM (retours playtest 11/10).
       if (cantinaDoor != null)
         PlanetType.cantina: _mapService.generateCantinaPlanet(),
+      if (falconDoor != null)
+        PlanetType.faucon: _mapService.generateFalconPlanet(),
     };
     final List<Player> placed = <Player>[
       for (final Player p in players)
@@ -495,9 +514,12 @@ class GameController extends Notifier<GameState?> {
       existingPortals: current.portals,
       avoidPositions: <Position>{
         ..._bossPositions(current, movingPlanet),
-        // Aucun contenu tiré sur la porte de la cantina ni de téléport.
+        // Aucun contenu tiré sur la porte de la cantina, de téléport, du
+        // Faucon Millénium, ni sur la case de Patapuche.
         if (current.cantina?.planet == movingPlanet)
           current.cantina!.anchor,
+        if (current.falcon?.planet == movingPlanet)
+          current.falcon!.anchor,
         if (current.teleport?.planet == movingPlanet) ...<Position>[
           current.teleport!.position,
           if (current.teleport!.position2 != null)
@@ -678,6 +700,17 @@ class GameController extends Notifier<GameState?> {
       return _enterCantina(newPlayers, current);
     }
 
+    // PORTE DU FAUCON MILLÉNIUM (retours playtest 11/10) : même gabarit
+    // que la porte de la cantina — accessible dès le niveau 1, la case
+    // sert de portail vers la mini-zone 3x3. Vérifiée APRÈS les
+    // rencontres et AVANT la recherche des portails.
+    final FalconZone? falconZone = current.falcon;
+    if (falconZone != null &&
+        moving.planet == falconZone.planet &&
+        target == falconZone.anchor) {
+      return _enterFalcon(newPlayers, current);
+    }
+
     // PATAPUCHE (retours playtest 20/09) : marcher sur sa case offre le
     // don (+100 ATK / +100 PV) — UNE SEULE FOIS par joueur. Sa case est
     // toujours sans monstre ni contenu (il les évite).
@@ -723,6 +756,19 @@ class GameController extends Notifier<GameState?> {
       // CANTINA : la case d'entrée (1,2) sert de sortie (retours playtest
       // 19/09 v2).
       if (moving.planet == PlanetType.cantina) {
+        if (targetTile.cantinaEntrance) {
+          return _travelBack(newPlayers, current);
+        }
+        return MoveResult.moved;
+      }
+      // FAUCON MILLÉNIUM (retours playtest 11/10) : marcher sur la case
+      // du haut-milieu rend la super attaque du joueur inratable (une
+      // seule fois) ; la case d'entrée (1,2) sert de sortie, comme la
+      // cantina.
+      if (moving.planet == PlanetType.faucon) {
+        if (target == PlanetConstants.falconBonusPosition) {
+          return _falconBonus(newPlayers, current);
+        }
         if (targetTile.cantinaEntrance) {
           return _travelBack(newPlayers, current);
         }
@@ -882,6 +928,79 @@ class GameController extends Notifier<GameState?> {
     return MoveResult.cantinaTravel;
   }
 
+  /// Entrée dans le FAUCON MILLÉNIUM (retours playtest 11/10) : la porte
+  /// de la planète principale téléporte dans la mini-zone 3x3 — arrivée
+  /// sur sa case d'entrée (1,2), retour mémorisé
+  /// (returnPlanet/returnPosition). Accessible dès le niveau 1.
+  MoveResult _enterFalcon(List<Player> newPlayers, GameState current) {
+    final FalconZone zone = current.falcon!;
+    final int index = current.currentPlayerIndex;
+    Planet faucon = current.planets[PlanetType.faucon] ??
+        _mapService.generateFalconPlanet();
+
+    final List<Player> players = List<Player>.of(newPlayers);
+    players[index] = players[index].copyWith(
+      position: PlanetConstants.falconArrival,
+      planet: PlanetType.faucon,
+      returnPlanet: current.planetType,
+      returnPosition: zone.anchor,
+    );
+    log('🚀 ${players[index].name} monte à bord du Faucon Millénium.');
+
+    // Révélation autour du point d'arrivée + population (aucun contenu
+    // n'est tiré : toutes les cases portent le marqueur sanctuaire).
+    final populate = _mapService.populateNewlyDiscoveredTiles(
+      before: faucon,
+      after:
+          _mapService.revealFogAround(faucon, PlanetConstants.falconArrival),
+      phase: phaseOf(current),
+      rng: _diceRandom,
+      occupied: players
+          .where((Player p) =>
+              p.planet == PlanetType.faucon && !p.eliminated)
+          .map((Player p) => p.position)
+          .toSet(),
+      existingPortals: current.portals,
+      avoidPositions: _bossPositions(current, PlanetType.faucon),
+      bossUnlocked:
+          current.players.any((Player p) => !p.eliminated && p.level >= 5),
+    );
+    faucon = populate.planet;
+
+    state = _applySurvivorCheck(current.copyWith(
+      players: players,
+      planets: <PlanetType, Planet>{
+        ...current.planets,
+        PlanetType.faucon: faucon,
+      },
+      currentPlanet: faucon,
+      planetType: PlanetType.faucon,
+      // Première entrée : `visited` → le médaillon remplace le logo jaune.
+      falcon: zone.visited ? null : zone.copyWith(visited: true),
+      // Le pas sur la case-portail coûte 1 point, comme tout déplacement.
+      movementPointsRemaining: current.movementPointsRemaining - 1,
+    ));
+    return MoveResult.falconTravel;
+  }
+
+  /// CASE DU FAUCON (haut-milieu — retours playtest 11/10) : le joueur
+  /// actif gagne la super attaque INRATABLE jusqu'à la fin de la partie
+  /// (une seule fois par joueur — revenir dessus ne fait que rejouer le
+  /// message et le son).
+  MoveResult _falconBonus(List<Player> newPlayers, GameState current) {
+    final Player active = newPlayers[current.currentPlayerIndex];
+    if (active.superAttackGuaranteed) {
+      return MoveResult.falconBonusAgain; // déjà acquis : message seul
+    }
+    final List<Player> players = List<Player>.of(newPlayers);
+    players[current.currentPlayerIndex] =
+        active.copyWith(superAttackGuaranteed: true);
+    state = current.copyWith(players: players);
+    log('🛸 ${players[current.currentPlayerIndex].name} : super attaque '
+        'inratable jusqu’à la fin de la partie !');
+    return MoveResult.falconBonus;
+  }
+
   /// Voyage ALLER : la planète courante devient la planète secondaire liée
   /// au portail, arrivée sur son portail central.
   MoveResult _travelThroughPortal(
@@ -1024,6 +1143,8 @@ class GameController extends Notifier<GameState?> {
     final Set<Position> bossPositions = _bossPositions(state!, planet.type);
     final Position? cantinaDoor =
         (state!.cantina?.planet == planet.type) ? state!.cantina!.anchor : null;
+    final Position? falconDoor =
+        (state!.falcon?.planet == planet.type) ? state!.falcon!.anchor : null;
     final Position? teleportDoor = (state!.teleport?.planet == planet.type)
         ? state!.teleport!.position
         : null;
@@ -1060,6 +1181,7 @@ class GameController extends Notifier<GameState?> {
             !isPortalTile(Position(t.x, t.y)) &&
             !bossPositions.contains(Position(t.x, t.y)) &&
             Position(t.x, t.y) != cantinaDoor &&
+            Position(t.x, t.y) != falconDoor &&
             Position(t.x, t.y) != teleportDoor &&
             Position(t.x, t.y) != teleportDoor2 &&
             Position(t.x, t.y) != patapuchePos &&
@@ -1556,6 +1678,7 @@ class GameController extends Notifier<GameState?> {
       avoidPositions: <Position>{
         ..._bossPositions(next, nextPlanet.type),
         if (next.cantina?.planet == nextPlanet.type) next.cantina!.anchor,
+        if (next.falcon?.planet == nextPlanet.type) next.falcon!.anchor,
         if (next.teleport?.planet == nextPlanet.type) ...<Position>[
           next.teleport!.position,
           if (next.teleport!.position2 != null)
@@ -1947,6 +2070,8 @@ class GameController extends Notifier<GameState?> {
         // Jamais de portail SUR la porte de la cantina ou de téléport.
         cantinaDoor:
             next.cantina?.planet == mainType ? next.cantina!.anchor : null,
+        falconDoor:
+            next.falcon?.planet == mainType ? next.falcon!.anchor : null,
         teleportDoor: next.teleport?.planet == mainType
             ? next.teleport!.position
             : null,
@@ -2031,6 +2156,7 @@ class GameController extends Notifier<GameState?> {
             !occupied.contains(p) &&
             !s.portals.any((Portal portal) => portal.position == p) &&
             !(s.cantina?.planet == type && s.cantina!.anchor == p) &&
+            !(s.falcon?.planet == type && s.falcon!.anchor == p) &&
             !(s.teleport != null &&
                 s.teleport!.planet == type &&
                 (s.teleport!.position == p ||

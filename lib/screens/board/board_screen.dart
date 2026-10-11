@@ -79,6 +79,10 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
   /// planète courante (retours playtest 19/09).
   String _ambienceTrackFor(GameState state) {
     if (state.planetType == PlanetType.cantina) return 'lieux/cantina';
+    // Faucon Millénium (retours playtest 11/10) : musique de lieu dédiée
+    // (fichier absent → silence, l'ambiance de la planète reprend à la
+    // sortie).
+    if (state.planetType == PlanetType.faucon) return 'lieux/faucon';
     return 'planetes/${planetAmbienceTrack(state.planetType)}';
   }
 
@@ -217,6 +221,21 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
       // Consommation à la cantina (retours playtest 19/09) : PV au max.
       ref.read(soundControllerProvider).playSfx('carte_positive');
       _showCantinaDrinkDialog();
+    } else if (result == MoveResult.falconTravel) {
+      // Entrée dans le Faucon Millénium par sa case-portail (retours
+      // playtest 11/10) : la musique bascule via _updateAmbience (listen).
+      ref.read(soundControllerProvider).playSfx('portail');
+      _showFalconEnterDialog();
+    } else if (result == MoveResult.falconBonus) {
+      // Case du Faucon (retours playtest 11/10) : super attaque inratable
+      // gagnée — son déposé + message.
+      ref.read(soundControllerProvider).playSfx('faucon/huuu');
+      _showFalconBonusDialog();
+    } else if (result == MoveResult.falconBonusAgain) {
+      // Case du Faucon revisitée (11/10) : son + message seul, aucun
+      // effet — le bonus est déjà acquis pour ce joueur.
+      ref.read(soundControllerProvider).playSfx('faucon/huuu');
+      _showFalconBonusAgainDialog();
     } else if (result == MoveResult.allyEncounter) {
       _showAllyDialog();
     } else if (result == MoveResult.itemEncounter) {
@@ -276,6 +295,68 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
             'Marchez sur le comptoir (ligne du milieu) pour vous '
             'désaltérer et regagner tous vos PV. Repassez par la case '
             'd\'entrée pour ressortir.'),
+        actions: <Widget>[
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Entrée dans le FAUCON MILLÉNIUM (retours playtest 11/10).
+  void _showFalconEnterDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('🚀 Bienvenue sur le Faucon Millénium !'),
+        content: const Text(
+            'Le vaisseau le plus rapide de la galaxie vous ouvre ses '
+            'portes.\n\nRepartez par la case d’où vous êtes arrivé. Et '
+            'si vous trouvez ce que Chewbacca cache en haut… votre super '
+            'attaque ne ratera plus jamais !'),
+        actions: <Widget>[
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Case du FAUCON (haut-milieu — 11/10) : super attaque inratable
+  /// gagnée pour ce joueur jusqu'à la fin de la partie.
+  void _showFalconBonusDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('🦁 Huuuuuuw !'),
+        content: const Text(
+            'Huuuuuw ! Votre super attaque n’échouera plus : elle '
+            'réussira à CHAQUE coup, jusqu’à la fin de la partie !\n\n'
+            '(Elle reste utilisable une fois par combat, avec sa '
+            'recharge habituelle.)'),
+        actions: <Widget>[
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Case du FAUCON revisitée (11/10) : message seul, aucun effet.
+  void _showFalconBonusAgainDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('🦁 Huuuuuuw !'),
+        content: const Text(
+            'Huuuuuw ! Votre super attaque est déjà inratable — profitez '
+            'en, ça durera jusqu’à la fin de la partie !'),
         actions: <Widget>[
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -733,6 +814,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
                         bosses: state.bosses,
                         portals: state.portals,
                         cantina: state.cantina,
+                        falcon: state.falcon,
                         teleport: state.teleport,
                         patapuche: state.patapuche,
                         controller: _boardController,

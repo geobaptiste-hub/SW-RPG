@@ -36,6 +36,7 @@ String planetImageId(PlanetType type) => switch (type) {
       PlanetType.etoileNoire => 'etoile_noire',
       PlanetType.dagobah => 'dagobah',
       PlanetType.cantina => 'cantina',
+      PlanetType.faucon => 'faucon',
     };
 
 /// Identifiant d'ambiance AUDIO d'une planète (dossier `assets/audio/

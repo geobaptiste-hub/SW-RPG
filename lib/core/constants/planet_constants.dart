@@ -82,11 +82,20 @@ class PlanetConstants {
     PlanetType.etoileNoire: 'Étoile Noire',
     PlanetType.dagobah: 'Dagobah',
     PlanetType.cantina: 'Cantina',
+    PlanetType.faucon: 'Faucon Millénium',
   };
 
   /// Position d'arrivée / de départ DANS la cantina (milieu de la rangée
   /// du bas — la rangée du milieu est le comptoir, celle du haut le bar).
   static const Position cantinaArrival = Position(1, 2);
+
+  /// Position d'arrivée / de sortie DANS le Faucon Millénium (milieu de
+  /// la rangée du bas — retours playtest 11/10).
+  static const Position falconArrival = Position(1, 2);
+
+  /// La CASE DU FAUCON (haut-milieu de la zone) : l'image déposée
+  /// s'y affiche et y marcher rend la super attaque inratable.
+  static const Position falconBonusPosition = Position(1, 0);
 
   /// Ambiances visuelles : chaque planète possède ses propres couleurs.
   static const Map<PlanetType, PlanetVisual> visuals = {
@@ -140,6 +149,12 @@ class PlanetConstants {
       primaryColor: 0xFF6E4A2A,
       accentColor: 0xFFD9A05B,
       blockedColor: 0xFF3A2614,
+    ),
+    // Faucon Millénium : coque blanche, soute lumineuse (retours 11/10).
+    PlanetType.faucon: PlanetVisual(
+      primaryColor: 0xFFDDE2E8,
+      accentColor: 0xFFF7F9FB,
+      blockedColor: 0xFF8E99A6,
     ),
   };
 

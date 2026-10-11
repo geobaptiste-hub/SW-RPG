@@ -2,6 +2,7 @@ import '../core/constants/enums.dart';
 import '../core/utils/json_utils.dart';
 import 'boss.dart';
 import 'cantina_zone.dart';
+import 'falcon_zone.dart';
 import 'patapuche.dart';
 import 'teleport_portal.dart';
 import 'planet.dart';
@@ -66,6 +67,11 @@ class GameState {
   /// 19/09) ; `null` pour les parties créées avant cette fonctionnalité.
   final CantinaZone? cantina;
 
+  /// Le FAUCON MILLÉNIUM (zone 3x3 sur la planète principale — retours
+  /// playtest 11/10) ; `null` pour les parties créées avant cette
+  /// fonctionnalité.
+  final FalconZone? falcon;
+
   /// La CASE DE TÉLÉPORTATION (planète principale — retours playtest
   /// 20/09) ; `null` pour les parties créées avant cette fonctionnalité.
   final TeleportPortal? teleport;
@@ -99,6 +105,7 @@ class GameState {
     required this.bosses,
     required this.portals,
     this.cantina,
+    this.falcon,
     this.teleport,
     this.doubleMonstersUnlocked = false,
     this.patapuche,
@@ -135,6 +142,7 @@ class GameState {
     List<Boss>? bosses,
     List<Portal>? portals,
     CantinaZone? cantina,
+    FalconZone? falcon,
     TeleportPortal? teleport,
     bool? doubleMonstersUnlocked,
     Patapuche? patapuche,
@@ -161,6 +169,7 @@ class GameState {
       bosses: bosses ?? this.bosses,
       portals: portals ?? this.portals,
       cantina: cantina ?? this.cantina,
+      falcon: falcon ?? this.falcon,
       teleport: teleport ?? this.teleport,
       doubleMonstersUnlocked:
           doubleMonstersUnlocked ?? this.doubleMonstersUnlocked,
@@ -194,6 +203,7 @@ class GameState {
         'bosses': bosses.map((Boss boss) => boss.toJson()).toList(),
         'portals': portals.map((Portal portal) => portal.toJson()).toList(),
         if (cantina != null) 'cantina': cantina!.toJson(),
+        if (falcon != null) 'falcon': falcon!.toJson(),
         if (teleport != null) 'teleport': teleport!.toJson(),
         if (patapuche != null) 'patapuche': patapuche!.toJson(),
         'doubleMonstersUnlocked': doubleMonstersUnlocked,
@@ -235,6 +245,9 @@ class GameState {
       cantina: json['cantina'] == null
           ? null
           : CantinaZone.fromJson(json['cantina']),
+      falcon: json['falcon'] == null
+          ? null
+          : FalconZone.fromJson(json['falcon']),
       teleport: json['teleport'] == null
           ? null
           : TeleportPortal.fromJson(json['teleport']),

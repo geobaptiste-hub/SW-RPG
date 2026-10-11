@@ -41,6 +41,7 @@ flutter:
     - assets/audio/music/preparation/
     - assets/audio/sfx/
     - assets/audio/sfx/super_attaque/
+    - assets/audio/sfx/faucon/
     - assets/images/allies/
     - assets/images/allies/healers/
     - assets/images/allies/nukers/
@@ -51,6 +52,7 @@ flutter:
     - assets/images/armors/
     - assets/images/bosses/
     - assets/images/cantina/
+    - assets/images/faucon/
     - assets/images/decor/
     - assets/images/characters/
     - assets/images/monsters/
