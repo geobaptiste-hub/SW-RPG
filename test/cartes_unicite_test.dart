@@ -3,10 +3,12 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:star_wars_rpg/core/constants/board_constants.dart';
 import 'package:star_wars_rpg/core/constants/card_constants.dart';
 import 'package:star_wars_rpg/core/constants/character_constants.dart';
 import 'package:star_wars_rpg/core/constants/enums.dart';
 import 'package:star_wars_rpg/models/ally.dart';
+import 'package:star_wars_rpg/models/armor.dart';
 import 'package:star_wars_rpg/models/game_state.dart';
 import 'package:star_wars_rpg/models/planet.dart';
 import 'package:star_wars_rpg/models/portal.dart' show Portal;
@@ -307,25 +309,99 @@ void main() {
           reason: '10 Ewoks détenus (le plafond total) : plus de tirage');
     });
 
-    test('les cartes d\'un joueur ÉLIMINÉ sont remises en jeu', () async {
+    test('les cartes d\'un joueur ÉLIMINÉ sont remises en jeu '
+        '(déterministe)', () async {
       final Ally r2d2 = CardConstants.recruitDeck
           .firstWhere((Ally a) => a.name == 'R2-D2');
-      bool appeared = false;
-      for (int run = 0; run < 12; run++) {
-        // Trois joueurs : le survivant-check (chacun pour soi) ne clôt
-        // pas la partie, et l'éliminé libère R2-D2.
-        final Planet planet = await _walkAndScan(players: <Player>[
-          _player(index: 0),
-          _player(index: 1, allies: <Ally>[r2d2], eliminated: true),
-          _player(faction: Faction.sith, index: 2),
-        ]);
-        for (final Tile t in planet.tiles) {
-          if (t.ally?.name == 'R2-D2') appeared = true;
-        }
-      }
-      expect(appeared, isTrue,
-          reason: 'le joueur éliminé libère ses cartes : R2-D2 peut '
-              'ressortir pour les survivants');
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final GameController controller =
+          container.read(gameControllerProvider.notifier);
+      final GameState created = await controller.createNewGame(NewGameConfig(
+        mode: GameMode.chacunPourSoi,
+        // TROIS joueurs : avec 2, l'élimination du 2e clôt la partie
+        // (survivant unique) et tout déplacement est ignoré.
+        playerCount: 3,
+        teamSize: 0,
+        planetType: PlanetType.hoth,
+        characters: <CharacterDefinition>[
+          CharacterConstants.characters[0],
+          CharacterConstants.characters[1],
+          CharacterConstants.characters[2],
+        ],
+      ));
+      // Le joueur 2 est ÉLIMINÉ en détenant R2-D2 : ses cartes ne comptent
+      // plus comme « prises ».
+      controller.state = created.copyWith(players: <Player>[
+        created.players[0],
+        created.players[1].copyWith(
+          eliminated: true,
+          allies: <Ally>[r2d2],
+        ),
+        created.players[2],
+      ]);
+
+      // R2-D2 posé devant le joueur actif : la rencontre doit être
+      // NORMALE (offre de recrutement) — preuve que la carte n'est pas
+      // considérée comme prise. Si l'éliminé bloquait encore ses cartes,
+      // la case serait vidée sans effet (MoveResult.moved).
+      // Choix DÉTERMINISTE de la case : n'importe quelle case libre du
+      // plateau, le joueur est téléporté à côté (les voisins du départ
+      // peuvent tous porter des monstres tirés au peuplement initial).
+      final GameState s = container.read(gameControllerProvider)!;
+      final Planet planet = s.currentPlanet;
+      final Position target = planet.tiles
+          .map((Tile t) => Position(t.x, t.y))
+          .firstWhere((Position p) =>
+              planet.isWalkableAt(p.x, p.y) &&
+              planet.tileAt(p.x, p.y).monster == null &&
+              planet.tileAt(p.x, p.y).ally == null &&
+              planet.tileAt(p.x, p.y).weapon == null &&
+              planet.tileAt(p.x, p.y).armor == null &&
+              !planet.tileAt(p.x, p.y).healSite &&
+              !planet.tileAt(p.x, p.y).cantina &&
+              !BoardConstants.startPositions.contains(p) &&
+              !s.portals.any((Portal portal) =>
+                  portal.position == p && portal.discovered) &&
+              s.cantina?.anchor != p &&
+              s.falcon?.anchor != p &&
+              s.teleport?.position != p &&
+              p.chebyshevDistanceTo(s.activePlayer.position) >= 3);
+      final Position from = mapService
+          .neighborPositions(target, planet)
+          .firstWhere((Position p) =>
+              planet.isWalkableAt(p.x, p.y) &&
+              planet.tileAt(p.x, p.y).monster == null);
+      final Planet revealed =
+          mapService.revealFogAround(planet, from);
+      final List<Tile> tiles = List<Tile>.of(revealed.tiles);
+      tiles[target.y * planet.width + target.x] =
+          tiles[target.y * planet.width + target.x].copyWith(ally: r2d2);
+      controller.state = s.copyWith(
+        players: <Player>[
+          s.players[0].copyWith(position: from),
+          s.players[1],
+          s.players[2],
+        ],
+        // Le premier joueur est tiré AU HASARD à la création : on force
+        // l'index 0, celui qui est placé sur `from`.
+        currentPlayerIndex: 0,
+        currentPlanet: revealed.withTiles(tiles),
+        planets: <PlanetType, Planet>{
+          ...s.planets,
+          PlanetType.hoth: revealed.withTiles(tiles),
+        },
+        movementPointsRemaining: 2,
+      );
+
+      final MoveResult result =
+          controller.moveActivePlayerTo(target.x, target.y);
+      expect(result, MoveResult.allyEncounter,
+          reason: 'la carte d\'un joueur ÉLIMINÉ reste trouvable et '
+              'proposable');
+      expect(container
+              .read(gameControllerProvider.notifier).pendingAllyOffer,
+          isNotNull);
     });
 
     test('une carte ENNEMIE pour l\'actif mais possédée par un autre '
@@ -350,6 +426,200 @@ void main() {
       expect(leaked, isFalse,
           reason: '${sithCard.name} est dans l\'équipe du joueur 2 : il '
               'ne peut plus attaquer le joueur 1 sur le plateau');
+    });
+  });
+
+  group('Purge des exemplaires déjà posés (fix 11/10 v2 — « doublon à '
+      'moitié »)', () {
+    /// Plateau avec LA MÊME carte posée sur deux cases voisines du
+    /// joueur (scénario du playtest : trouvée, mise en réserve, puis
+    /// retrouvée 5 tours plus tard).
+    (GameController, ProviderContainer, List<Position>) twoCopies({
+      required Tile Function(Tile) place,
+    }) {
+      final Planet planet =
+          mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
+      final Player player = Player(
+        id: 'p1',
+        name: 'Padmé',
+        faction: Faction.rebel,
+        position: BoardConstants.startPositions.first,
+        planet: PlanetType.hoth,
+        level: 4,
+        xp: 950,
+        attack: 125,
+        hp: 1100,
+        maxHp: 1300,
+      );
+      // Brouillard révélé autour du joueur + cases cibles DÉCOUVERTES :
+      // sinon le populate du déplacement remplacerait les copies posées
+      // par des tirages frais (cases non découvertes).
+      final Planet revealed = mapService.revealFogAround(
+          planet, player.position);
+      final List<Position> targets = mapService
+          .validMoveTargets(
+              planet: revealed, players: <Player>[player],
+              activePlayerIndex: 0)
+          .where((Position p) =>
+              revealed.tileAt(p.x, p.y).monster == null)
+          .take(2)
+          .toList();
+      assert(targets.length == 2,
+          'deux voisins sans monstre requis pour le test');
+      final List<Tile> tiles = List<Tile>.of(revealed.tiles);
+      for (final Position p in targets) {
+        tiles[p.y * planet.width + p.x] = place(
+            tiles[p.y * planet.width + p.x]).copyWith(
+          discovered: true,
+          visible: true,
+        );
+      }
+      final ProviderContainer container = _container(5);
+      final GameController controller =
+          container.read(gameControllerProvider.notifier);
+      controller.state = GameState(
+        schemaVersion: GameState.currentSchemaVersion,
+        gameId: 'purge_test',
+        seed: 42,
+        mode: GameMode.chacunPourSoi,
+        teamSize: 0,
+        planetType: PlanetType.hoth,
+        currentPlanet: planet.withTiles(tiles),
+        planets: <PlanetType, Planet>{
+          PlanetType.hoth: planet.withTiles(tiles)
+        },
+        players: <Player>[player],
+        turn: 9,
+        currentPlayerIndex: 0,
+        gameTimeSeconds: 0,
+        movementPointsRemaining: 2,
+        lastDiceRoll: 2,
+        bosses: const [],
+        portals: const [],
+        status: GameStatus.inProgress,
+      );
+      return (controller, container, targets);
+    }
+
+    test('tenue mise en RÉSERVE : le second exemplaire quitte le plateau',
+        () {
+      final Armor armor = CardConstants.armors.first;
+      final (GameController controller, ProviderContainer container,
+          List<Position> targets) = twoCopies(
+        place: (Tile t) => t.copyWith(armor: armor),
+      );
+      addTearDown(container.dispose);
+
+      expect(controller.moveActivePlayerTo(targets[0].x, targets[0].y),
+          MoveResult.itemEncounter);
+      controller.storePendingArmor();
+
+      final Planet after =
+          container.read(gameControllerProvider)!.currentPlanet;
+      expect(after.tiles.where((Tile t) =>
+          t.armor?.name == armor.name).length, 0,
+          reason: 'la tenue est en réserve : AUCUN exemplaire ne reste '
+              'sur le plateau (le scénario du playtest)');
+    });
+
+    test('arme ÉQUIPÉE : le second exemplaire quitte le plateau', () {
+      // Une arme COMMUNE : l'equipement est bloque par rarete au niveau 4.
+      final Weapon weapon = CardConstants.weapons
+          .firstWhere((Weapon w) => w.rarity == Rarity.commun);
+      final (GameController controller, ProviderContainer container,
+          List<Position> targets) = twoCopies(
+        place: (Tile t) => t.copyWith(weapon: weapon),
+      );
+      addTearDown(container.dispose);
+
+      expect(controller.moveActivePlayerTo(targets[0].x, targets[0].y),
+          MoveResult.itemEncounter);
+      expect(controller.equipPendingWeapon(), isTrue);
+
+      final Planet after =
+          container.read(gameControllerProvider)!.currentPlanet;
+      expect(after.tiles.where((Tile t) =>
+          t.weapon?.name == weapon.name).length, 0);
+    });
+
+    test('allié RECRUTÉ : le second exemplaire quitte le plateau', () {
+      final Ally ally = CardConstants.recruitDeck.firstWhere(
+          (Ally a) =>
+              a.type != AllyType.escouade && a.faction == Faction.rebel);
+      final (GameController controller, ProviderContainer container,
+          List<Position> targets) = twoCopies(
+        place: (Tile t) => t.copyWith(ally: ally),
+      );
+      addTearDown(container.dispose);
+
+      expect(controller.moveActivePlayerTo(targets[0].x, targets[0].y),
+          MoveResult.allyEncounter);
+      controller.recruitPendingAlly();
+
+      final Planet after =
+          container.read(gameControllerProvider)!.currentPlanet;
+      expect(after.tiles.where((Tile t) =>
+          t.ally?.name == ally.name).length, 0,
+          reason: 'l\'allié recruté est unique sur tout le plateau');
+    });
+
+    test('escouade SOUS le plafond : l\'autre exemplaire reste trouvable',
+        () {
+      final Ally ewok =
+          CardConstants.squads.firstWhere((Ally s) => s.name == 'Ewok');
+      final (GameController controller, ProviderContainer container,
+          List<Position> targets) = twoCopies(
+        place: (Tile t) => t.copyWith(ally: ewok),
+      );
+      addTearDown(container.dispose);
+
+      expect(controller.moveActivePlayerTo(targets[0].x, targets[0].y),
+          MoveResult.allyEncounter);
+      controller.recruitPendingAlly();
+
+      final Planet after =
+          container.read(gameControllerProvider)!.currentPlanet;
+      expect(
+        after.tileAt(targets[1].x, targets[1].y).ally?.name,
+        'Ewok',
+        reason: 'une seule escouade détenue (< 10) : le second '
+            'exemplaire POSÉ reste sur le plateau (le populate peut '
+            'légitimement en tirer d\'autres sur les nouvelles cases)',
+      );
+    });
+
+    test('vieille sauvegarde : marcher sur une carte DÉJÀ possédée ne '
+        'rouvre aucune offre, la copie disparaît', () {
+      final Armor armor = CardConstants.armors.first;
+      final (GameController controller, ProviderContainer container,
+          List<Position> targets) = twoCopies(
+        place: (Tile t) => t.copyWith(armor: armor),
+      );
+      addTearDown(container.dispose);
+      // Le joueur possède DÉJÀ la tenue (réserve) — état d'une partie
+      // créée avant le fix.
+      final GameState s = container.read(gameControllerProvider)!;
+      controller.state = s.copyWith(
+        players: <Player>[
+          s.players[0].copyWith(storedArmor: armor),
+        ],
+      );
+
+      final MoveResult result =
+          controller.moveActivePlayerTo(targets[0].x, targets[0].y);
+      expect(result, MoveResult.moved,
+          reason: 'carte déjà possédée : ni offre ni effet');
+      expect(container
+          .read(gameControllerProvider.notifier).pendingArmorOffer, isNull);
+      expect(
+        container.read(gameControllerProvider)!.currentPlanet
+            .tileAt(targets[0].x, targets[0].y).armor,
+        isNull,
+        reason: 'la copie disparaît du plateau',
+      );
+      expect(container.read(gameControllerProvider)!.players[0].storedArmor,
+          isNotNull,
+          reason: 'la possession du joueur est intacte');
     });
   });
 }

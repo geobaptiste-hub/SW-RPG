@@ -597,6 +597,13 @@ class GameController extends Notifier<GameState?> {
     final Player active = newPlayers[current.currentPlayerIndex];
     if (targetTile.ally != null) {
       final Ally offered = targetTile.ally!;
+      // UNICITÉ (fix 11/10 v2) : copie préexistante d'une carte déjà
+      // possédée par un joueur (vieille sauvegarde) — plus rien ne se
+      // passe, la copie disparaît (ni recrutement, ni attaque).
+      if (_takenCardNames(current).contains(offered.name)) {
+        _clearTileEvent(populate.planet, target, TileEventKind.ally);
+        return MoveResult.moved;
+      }
       pendingSpecialDamage = null;
 
       final bool enemyAlly = offered.faction != active.faction &&
@@ -658,6 +665,12 @@ class GameController extends Notifier<GameState?> {
     }
     if (targetTile.weapon != null) {
       final Weapon weapon = targetTile.weapon!;
+      // UNICITÉ (fix 11/10 v2) : copie préexistante d'une arme déjà
+      // possédée — la copie disparaît, aucune offre.
+      if (_takenCardNames(current).contains(weapon.name)) {
+        _clearTileEvent(populate.planet, target, TileEventKind.weapon);
+        return MoveResult.moved;
+      }
       if (weapon.rarity.index >= Rarity.epique.index) {
         log('⚔ ${active.name} a trouvé ${weapon.name} '
             '(${weapon.rarity.displayName}) !');
@@ -668,6 +681,12 @@ class GameController extends Notifier<GameState?> {
     }
     if (targetTile.armor != null) {
       final Armor armor = targetTile.armor!;
+      // UNICITÉ (fix 11/10 v2) : copie préexistante d'une tenue déjà
+      // possédée — la copie disparaît, aucune offre.
+      if (_takenCardNames(current).contains(armor.name)) {
+        _clearTileEvent(populate.planet, target, TileEventKind.armor);
+        return MoveResult.moved;
+      }
       if (armor.rarity.index >= Rarity.epique.index) {
         log('🛡 ${active.name} a trouvé ${armor.name} '
             '(${armor.rarity.displayName}) !');
@@ -1395,6 +1414,9 @@ class GameController extends Notifier<GameState?> {
     players[current.currentPlayerIndex] = updated;
     state = current.copyWith(players: players);
     pendingAllyOffer = null;
+    // Unicité : les autres exemplaires de CETTE carte quittent le plateau
+    // (escouade sous 10 : rien n'est purgé).
+    _purgeBoardCopies(ally: ally);
   }
 
   /// Refuse l'allié proposé : la carte est re-déposée ailleurs sur la
@@ -1419,6 +1441,8 @@ class GameController extends Notifier<GameState?> {
         players[current.currentPlayerIndex].copyWith(storedAlly: found);
     state = current.copyWith(players: players);
     pendingAllyOffer = null;
+    // Unicité : la carte en réserve est possédée (escouade sous 10 : rien).
+    _purgeBoardCopies(ally: found);
   }
 
   /// Transfère un allié de l'équipe vers la réserve. Si la réserve est
@@ -1565,6 +1589,8 @@ class GameController extends Notifier<GameState?> {
     );
     state = current.copyWith(players: players);
     pendingWeaponOffer = null;
+    // Unicité : l'arme équipée quitte le plateau (autres exemplaires).
+    _purgeBoardCopies(weapon: found);
     return true;
   }
 
@@ -1598,6 +1624,8 @@ class GameController extends Notifier<GameState?> {
     );
     state = current.copyWith(players: players);
     pendingArmorOffer = null;
+    // Unicité : la tenue équipée quitte le plateau (autres exemplaires).
+    _purgeBoardCopies(armor: found);
     return true;
   }
 
@@ -1611,6 +1639,8 @@ class GameController extends Notifier<GameState?> {
         .copyWith(storedWeapon: found, clearStoredWeapon: false);
     state = current.copyWith(players: players);
     pendingWeaponOffer = null;
+    // Unicité : l'arme en réserve est possédée.
+    _purgeBoardCopies(weapon: found);
   }
 
   /// Met la tenue trouvée en réserve (remplace l'éventuelle réserve actuelle).
@@ -1623,6 +1653,8 @@ class GameController extends Notifier<GameState?> {
         .copyWith(storedArmor: found);
     state = current.copyWith(players: players);
     pendingArmorOffer = null;
+    // Unicité : la tenue en réserve est possédée.
+    _purgeBoardCopies(armor: found);
   }
 
   /// Échange l'arme en réserve avec l'arme équipée (restrictions de niveau
@@ -2350,6 +2382,59 @@ class GameController extends Notifier<GameState?> {
       if (e.value >= GameConstants.squadMaxCopies) names.add(e.key);
     }
     return names;
+  }
+
+  /// UNICITÉ DES CARTES (fix 11/10 v2 — « le doublon à moitié ») : une
+  /// carte qui vient d'être prise par un joueur ne doit plus exister
+  /// NULLE PART sur le plateau. Le filtre de tirage ne vaut que pour les
+  /// futurs tirages : des exemplaires tirés AVANT la possession peuvent
+  /// rester posés sur d'autres cases (ex. la même tenue trouvée deux
+  /// fois). Purge TOUTES les planètes du nom de la carte prise — mais
+  /// seulement s'il est réellement « pris » : une escouade sous le
+  /// plafond de 10 exemplaires reste trouvables.
+  void _purgeBoardCopies({Ally? ally, Weapon? weapon, Armor? armor}) {
+    final GameState s = state!;
+    final Set<String> taken = _takenCardNames(s);
+    final String? allyName =
+        (ally != null && taken.contains(ally.name)) ? ally.name : null;
+    final String? weaponName =
+        (weapon != null && taken.contains(weapon.name)) ? weapon.name : null;
+    final String? armorName =
+        (armor != null && taken.contains(armor.name)) ? armor.name : null;
+    if (allyName == null && weaponName == null && armorName == null) return;
+
+    final Map<PlanetType, Planet> planets = Map<PlanetType, Planet>.of(s.planets);
+    bool changed = false;
+    for (final MapEntry<PlanetType, Planet> entry in planets.entries) {
+      final Planet planet = entry.value;
+      bool touched = false;
+      final List<Tile> tiles = List<Tile>.of(planet.tiles);
+      for (int i = 0; i < tiles.length; i++) {
+        final Tile t = tiles[i];
+        final bool hit = (allyName != null && t.ally?.name == allyName) ||
+            (weaponName != null && t.weapon?.name == weaponName) ||
+            (armorName != null && t.armor?.name == armorName);
+        if (hit) {
+          tiles[i] = t.copyWith(
+            clearAlly: allyName != null,
+            clearWeapon: weaponName != null,
+            clearArmor: armorName != null,
+          );
+          touched = true;
+        }
+      }
+      if (touched) {
+        planets[entry.key] = planet.withTiles(tiles);
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    state = s.copyWith(
+      planets: planets,
+      currentPlanet: planets[s.planetType] ?? s.currentPlanet,
+    );
+    log('♻️ ${allyName ?? weaponName ?? armorName} est désormais unique : '
+        'les autres exemplaires quittent le plateau.');
   }
 
   /// Déplacement de Patapuche à CHAQUE fin de tour : une case au hasard

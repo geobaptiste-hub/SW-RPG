@@ -927,9 +927,11 @@ void main() {
         after.currentPlanet.tiles
             .where((Tile t) => t.weapon?.name == weapon.name)
             .length,
-        1,
+        greaterThanOrEqualTo(1),
         reason: 'la carte REFUSÉE est re-déposée ailleurs : elle reste '
-            'trouvable (seules les cartes possédées quittent le plateau)',
+            'trouvable (seules les cartes possédées quittent le plateau — '
+            'le populate peut en avoir tiré une seconde, la carte n\'est '
+            'pas encore possédée)',
       );
     });
   });
