@@ -828,8 +828,10 @@ void main() {
     });
   });
 
-  group('Cases consommées : la carte se redépose ailleurs', () {
-    test('après ramassage, l\'arme existe toujours sur la planète', () async {
+  group('Cases consommées : unicités des cartes (retours playtest 11/10)',
+      () {
+    test('après ÉQUIPEMENT, la carte quitte le plateau (unicité) ; '
+        'après endTurn elle ne réapparaît pas', () async {
       final ProviderContainer container = _container(5);
       addTearDown(container.dispose);
       final Planet planet =
@@ -853,11 +855,6 @@ void main() {
         <Player>[player],
       );
 
-      final int weaponsBefore = planet.withTiles(tiles).tiles
-          .where((Tile t) => t.weapon != null)
-          .length;
-      expect(weaponsBefore, 1);
-
       final MoveResult result =
           controller.moveActivePlayerTo(target.x, target.y);
       expect(result, MoveResult.itemEncounter);
@@ -871,11 +868,11 @@ void main() {
         reason: 'la case d\'origine est bien vidée (pas de farm)',
       );
       expect(
-        after.tiles.where((Tile t) => t.weapon != null).length,
-        greaterThanOrEqualTo(1),
-        reason: 'la carte consommée a été redéposée ailleurs au hasard '
-            '(le populate peut en avoir posé d\'autres sur les nouvelles '
-            'découvertes)',
+        after.tiles.where((Tile t) =>
+            t.weapon?.name == weapon.name).length,
+        0,
+        reason: 'UNICITÉ (11/10) : l\'arme équipée n\'existe PLUS sur le '
+            'plateau — aucun jumeau re-déposé',
       );
 
       // FIX synchronisation : après endTurn, la planète restaurée depuis
@@ -888,6 +885,51 @@ void main() {
         isNull,
         reason: 'la carte consommée ne doit pas réapparaître au tour '
             'suivant (c\'était le bug « toujours la même carte »)',
+      );
+    });
+
+    test('après REFUS, l\'arme reste quelque part sur la planète '
+        '(elle n\'appartient à personne)', () async {
+      final ProviderContainer container = _container(5);
+      addTearDown(container.dispose);
+      final Planet planet =
+          mapService.generateStartPlanet(PlanetType.hoth, seed: 42);
+      final Player player = _player(level: 6, hp: 2000, maxHp: 2000)
+          .copyWith(planet: PlanetType.hoth);
+      final Weapon weapon = CardConstants.weapons
+          .firstWhere((Weapon w) => w.rarity == Rarity.commun);
+      final Position target = mapService
+          .validMoveTargets(
+              planet: planet, players: <Player>[player],
+              activePlayerIndex: 0)
+          .first;
+      final List<Tile> tiles = List<Tile>.of(planet.tiles);
+      tiles[target.y * planet.width + target.x] =
+          tiles[target.y * planet.width + target.x].copyWith(weapon: weapon);
+      final GameController controller =
+          container.read(gameControllerProvider.notifier);
+      controller.state = _duelState(
+        planet.withTiles(tiles),
+        <Player>[player],
+      );
+
+      controller.moveActivePlayerTo(target.x, target.y);
+      expect(container
+          .read(gameControllerProvider.notifier).pendingWeaponOffer,
+          isNotNull);
+      controller.declinePendingWeapon();
+
+      expect(container
+          .read(gameControllerProvider.notifier).pendingWeaponOffer,
+          isNull);
+      final GameState after = container.read(gameControllerProvider)!;
+      expect(
+        after.currentPlanet.tiles
+            .where((Tile t) => t.weapon?.name == weapon.name)
+            .length,
+        1,
+        reason: 'la carte REFUSÉE est re-déposée ailleurs : elle reste '
+            'trouvable (seules les cartes possédées quittent le plateau)',
       );
     });
   });

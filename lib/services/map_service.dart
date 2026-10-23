@@ -6,7 +6,9 @@ import '../core/constants/enums.dart' show GamePhase;
 import '../core/constants/game_constants.dart';
 import '../core/constants/card_constants.dart';
 import '../models/ally.dart';
+import '../models/armor.dart';
 import '../core/constants/monster_constants.dart';
+import '../models/weapon.dart';
 import '../core/constants/planet_constants.dart';
 import '../core/utils/direction.dart';
 import '../models/boss.dart';
@@ -527,6 +529,11 @@ class MapService {
     Set<Position> avoidPositions = const <Position>{},
     bool doubleMonstersUnlocked = false,
     Player? allyBiasPlayer,
+
+    /// UNICITÉ DES CARTES (retours playtest 11/10) : noms des alliés,
+    /// armes et tenues déjà possédés par un joueur (escouades : 10
+    /// exemplaires au total) — ces cartes ne sont plus tirées.
+    Set<String> takenCardNames = const <String>{},
   }) {
     final Set<Position> starts = BoardConstants.startPositions.toSet();
     final List<double> probabilities = switch (phase) {
@@ -592,30 +599,60 @@ class MapService {
           // Retours playtest 20/09 : le ratio allié AMI vs allié ENNEMI
           // (faction opposée — carte qui attaque) dépend du niveau du
           // joueur actif : N1 → 70 % ami, N2 → 60 %, N3+ → tirage naturel.
-          Ally drawn = CardConstants.randomAllyCard(rng);
-          if (allyBiasPlayer != null && allyBiasPlayer.level <= 2) {
-            final Faction joueurFaction = allyBiasPlayer.faction;
-            final bool friendly = drawn.faction == joueurFaction ||
-                drawn.faction == joueurFaction.alliedFaction;
-            final double seuil =
-                allyBiasPlayer.level == 1 ? 0.70 : 0.60;
-            final double roll2 = rng.nextDouble();
-            if (friendly && roll2 >= seuil) {
-              drawn = CardConstants.randomEnemyAllyCard(
-                  rng, joueurFaction);
-            } else if (!friendly && roll2 < seuil) {
-              drawn = CardConstants.randomFriendlyAllyCard(
-                  rng, joueurFaction);
+          // UNICITÉ DES CARTES (retours playtest 11/10) : une carte
+          // possédée par un joueur ne sort plus — on re-tire (40 essais
+          // max ; au-delà, la case reste vide).
+          Ally? drawn;
+          for (int attempt = 0; attempt < 40; attempt++) {
+            Ally candidate = CardConstants.randomAllyCard(rng);
+            if (allyBiasPlayer != null && allyBiasPlayer.level <= 2) {
+              final Faction joueurFaction = allyBiasPlayer.faction;
+              final bool friendly = candidate.faction == joueurFaction ||
+                  candidate.faction == joueurFaction.alliedFaction;
+              final double seuil =
+                  allyBiasPlayer.level == 1 ? 0.70 : 0.60;
+              final double roll2 = rng.nextDouble();
+              if (friendly && roll2 >= seuil) {
+                candidate = CardConstants.randomEnemyAllyCard(
+                    rng, joueurFaction);
+              } else if (!friendly && roll2 < seuil) {
+                candidate = CardConstants.randomFriendlyAllyCard(
+                    rng, joueurFaction);
+              }
+            }
+            if (!takenCardNames.contains(candidate.name)) {
+              drawn = candidate;
+              break;
             }
           }
-          tiles.add(newTile.copyWith(ally: drawn));
+          if (drawn != null) tiles.add(newTile.copyWith(ally: drawn));
         case 'objet':
+          // UNICITÉ DES CARTES (11/10) : mêmes re-tirages pour armes et
+          // tenues déjà possédées par un joueur.
           if (rng.nextBool()) {
-            tiles.add(newTile.copyWith(
-                weapon: CardConstants.randomWeaponCard(rng)));
+            Weapon? weapon;
+            for (int attempt = 0; attempt < 40; attempt++) {
+              final Weapon candidate = CardConstants.randomWeaponCard(rng);
+              if (!takenCardNames.contains(candidate.name)) {
+                weapon = candidate;
+                break;
+              }
+            }
+            if (weapon != null) {
+              tiles.add(newTile.copyWith(weapon: weapon));
+            }
           } else {
-            tiles.add(newTile.copyWith(
-                armor: CardConstants.randomArmorCard(rng)));
+            Armor? armor;
+            for (int attempt = 0; attempt < 40; attempt++) {
+              final Armor candidate = CardConstants.randomArmorCard(rng);
+              if (!takenCardNames.contains(candidate.name)) {
+                armor = candidate;
+                break;
+              }
+            }
+            if (armor != null) {
+              tiles.add(newTile.copyWith(armor: armor));
+            }
           }
         case 'soin':
           // Retours playtest 20/09 : jamais deux soins sur des cases

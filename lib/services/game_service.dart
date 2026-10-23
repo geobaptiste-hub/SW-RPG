@@ -327,6 +327,9 @@ class GameController extends Notifier<GameState?> {
         if (state.teleport != null) state.teleport!.position,
         if (patapucheDoor != null) patapucheDoor,
       },
+      // Partie neuve : aucune carte possédée (paramètre par défaut vide,
+      // explicite pour la lisibilité).
+      takenCardNames: const <String>{},
     );
     final Map<PlanetType, Planet> planets = <PlanetType, Planet>{
       planet.type: populate.planet,
@@ -534,6 +537,8 @@ class GameController extends Notifier<GameState?> {
           .any((Player p) => !p.eliminated && p.level >= 4),
       // Ratio allié ami/ennemi selon le niveau du joueur actif (20/09).
       allyBiasPlayer: movingBefore,
+      // Unicité des cartes (11/10) : ne pas tirer les cartes possédées.
+      takenCardNames: _takenCardNames(current),
     );
 
     // Planètes secondaires dévoilées par un portail découvert (Sprint 5).
@@ -642,6 +647,13 @@ class GameController extends Notifier<GameState?> {
       state = _applySurvivorCheck(
         state!.copyWith(players: newPlayers),
       );
+      // UNICITÉ (11/10) : la carte ennemie consommée reste en jeu
+      // SEULEMENT si personne ne la possède — possédée par un joueur
+      // (amie pour SA faction), elle ne doit plus exister sur le plateau ;
+      // le filtre de tirage l'empêche de toute façon de ressusciter.
+      if (enemyAlly && !_takenCardNames(state!).contains(offered.name)) {
+        _relocateDeclinedCard(ally: offered);
+      }
       return MoveResult.allyEncounter;
     }
     if (targetTile.weapon != null) {
@@ -1050,6 +1062,8 @@ class GameController extends Notifier<GameState?> {
       doubleMonstersUnlocked: current.players
           .any((Player p) => !p.eliminated && p.level >= 4),
       allyBiasPlayer: players[index],
+      // Unicité des cartes (11/10) : ne pas tirer les cartes possédées.
+      takenCardNames: _takenCardNames(current),
     );
     secondary = populate.planet;
 
@@ -1124,9 +1138,42 @@ class GameController extends Notifier<GameState?> {
       TileEventKind.healSite => tile.copyWith(healSite: false),
       _ => tile,
     };
+    final List<Tile> tiles = List<Tile>.of(planet.tiles);
+    tiles[target.y * planet.width + target.x] = cleared;
 
-    // Case de repli : jouable, libre de tout contenu, hors départs, hors
-    // cases occupées et hors case d'origine — de préférence non découverte.
+    // UNICITÉ DES CARTES (retours playtest 11/10) : un allié, une arme
+    // ou une tenue n'est PLUS re-déposé automatiquement — la carte part
+    // dans l'offre (pending) : recrutée/équipée/mise en réserve elle est
+    // possédée par un joueur (plus rien sur le plateau), refusée elle est
+    // re-déposée par `declinePending*` (elle reste trouvable). Le SOIN,
+    // qui n'est pas une carte possédable, garde son re-dépôt immédiat.
+    if (kind == TileEventKind.healSite) {
+      final Position? spot =
+          _findRelocationSpot(planet, target, TileEventKind.healSite);
+      if (spot != null) {
+        tiles[spot.y * planet.width + spot.x] =
+            tiles[spot.y * planet.width + spot.x].copyWith(healSite: true);
+      }
+    }
+
+    // FIX playtest : synchroniser currentPlanet ET la copie planets[type]
+    // (l'ancien code ne mettait à jour que currentPlanet — au endTurn, la
+    // planète restaurée depuis planets[type] faisait RÉAPPARAÎTRE la carte
+    // consommée sur sa case d'origine).
+    final Planet updated = planet.withTiles(tiles);
+    state = state!.copyWith(
+      currentPlanet: updated,
+      planets: <PlanetType, Planet>{...state!.planets, planet.type: updated},
+    );
+  }
+
+  /// Case de repli pour un re-dépôt : jouable, libre de tout contenu,
+  /// hors départs, hors cases occupées, hors portails/boss/portes
+  /// cantina/faucon/téléport/patapuche et hors cantina, à distance
+  /// Chebyshev ≥ 5 de [origin] — de préférence non découverte (cachette).
+  /// Null si aucune case ne convient.
+  Position? _findRelocationSpot(
+      Planet planet, Position origin, TileEventKind kind) {
     final Set<Position> occupied = state!.players
         .where((Player p) => p.planet == planet.type && !p.eliminated)
         .map((Player p) => p.position)
@@ -1139,7 +1186,8 @@ class GameController extends Notifier<GameState?> {
         (!PlanetConstants.startPlanets.contains(planet.type) &&
             p == PlanetConstants.secondaryPortalPosition);
     // Ni sur la case d'un BOSS actif (retours playtest 19/09 : un boss
-    // partageait sa case avec un monstre), ni sur la PORTE de la cantina.
+    // partageait sa case avec un monstre), ni sur les portes cantina /
+    // faucon / téléport, ni sur la case de Patapuche.
     final Set<Position> bossPositions = _bossPositions(state!, planet.type);
     final Position? cantinaDoor =
         (state!.cantina?.planet == planet.type) ? state!.cantina!.anchor : null;
@@ -1173,8 +1221,8 @@ class GameController extends Notifier<GameState?> {
     final List<Tile> candidates = <Tile>[
       for (final Tile t in planet.tiles)
         if (t.walkable &&
-            !(t.x == target.x && t.y == target.y) &&
-            Position(t.x, t.y).chebyshevDistanceTo(target) >= 5 &&
+            !(t.x == origin.x && t.y == origin.y) &&
+            Position(t.x, t.y).chebyshevDistanceTo(origin) >= 5 &&
             !t.visible &&
             !BoardConstants.startPositions.contains(Position(t.x, t.y)) &&
             !occupied.contains(Position(t.x, t.y)) &&
@@ -1197,34 +1245,47 @@ class GameController extends Notifier<GameState?> {
                 healSiteNearby(Position(t.x, t.y))))
           t,
     ];
+    if (candidates.isEmpty) return null;
+    final List<Tile> hidden =
+        candidates.where((Tile t) => !t.discovered).toList();
+    final List<Tile> pool = hidden.isNotEmpty ? hidden : candidates;
+    final Tile spot = pool[_diceRandom.nextInt(pool.length)];
+    return Position(spot.x, spot.y);
+  }
 
+  /// Re-dépose une carte REFUSÉE (allié/arme/tenue) sur une case libre de
+  /// la planète courante : elle reste trouvable — seules les cartes
+  /// POSSÉDÉES par un joueur quittent le plateau (unicité, retours
+  /// playtest 11/10). Référence de distance : la position du joueur
+  /// actif. Aucune case libre → la carte sort du jeu.
+  void _relocateDeclinedCard({
+    Ally? ally,
+    Weapon? weapon,
+    Armor? armor,
+  }) {
+    final GameState s = state!;
+    final Planet planet = s.currentPlanet;
+    final TileEventKind kind = ally != null
+        ? TileEventKind.ally
+        : weapon != null
+            ? TileEventKind.weapon
+            : TileEventKind.armor;
+    final Position? spot =
+        _findRelocationSpot(planet, s.activePlayer.position, kind);
+    if (spot == null) return;
     final List<Tile> tiles = List<Tile>.of(planet.tiles);
-    tiles[target.y * planet.width + target.x] = cleared;
-
-    if (candidates.isNotEmpty) {
-      final List<Tile> hidden =
-          candidates.where((Tile t) => !t.discovered).toList();
-      final List<Tile> pool =
-          hidden.isNotEmpty ? hidden : candidates;
-      final Tile spot = pool[_diceRandom.nextInt(pool.length)];
-      final Tile relocated = switch (kind) {
-        TileEventKind.ally => spot.copyWith(ally: tile.ally),
-        TileEventKind.weapon => spot.copyWith(weapon: tile.weapon),
-        TileEventKind.armor => spot.copyWith(armor: tile.armor),
-        TileEventKind.healSite => spot.copyWith(healSite: true),
-        _ => spot,
-      };
-      tiles[spot.y * planet.width + spot.x] = relocated;
-    }
-
-    // FIX playtest : synchroniser currentPlanet ET la copie planets[type]
-    // (l'ancien code ne mettait à jour que currentPlanet — au endTurn, la
-    // planète restaurée depuis planets[type] faisait RÉAPPARAÎTRE la carte
-    // consommée sur sa case d'origine).
+    final Tile relocated = switch (kind) {
+      TileEventKind.ally =>
+        tiles[spot.y * planet.width + spot.x].copyWith(ally: ally),
+      TileEventKind.weapon =>
+        tiles[spot.y * planet.width + spot.x].copyWith(weapon: weapon),
+      _ => tiles[spot.y * planet.width + spot.x].copyWith(armor: armor),
+    };
+    tiles[spot.y * planet.width + spot.x] = relocated;
     final Planet updated = planet.withTiles(tiles);
-    state = state!.copyWith(
+    state = s.copyWith(
       currentPlanet: updated,
-      planets: <PlanetType, Planet>{...state!.planets, planet.type: updated},
+      planets: <PlanetType, Planet>{...s.planets, planet.type: updated},
     );
   }
 
@@ -1336,8 +1397,15 @@ class GameController extends Notifier<GameState?> {
     pendingAllyOffer = null;
   }
 
-  /// Refuse l'allié proposé (la rencontre est consommée).
-  void declinePendingAlly() => pendingAllyOffer = null;
+  /// Refuse l'allié proposé : la carte est re-déposée ailleurs sur la
+  /// planète — elle reste trouvable (unicité des cartes, 11/10).
+  void declinePendingAlly() {
+    final Ally? declined = pendingAllyOffer;
+    pendingAllyOffer = null;
+    if (declined != null && state != null) {
+      _relocateDeclinedCard(ally: declined);
+    }
+  }
 
   /// Met l'allié proposé en réserve (retours playtest 10/09/2026 : utile
   /// quand la rareté dépasse le niveau ou que les PP manquent ; remplace
@@ -1416,12 +1484,25 @@ class GameController extends Notifier<GameState?> {
     state = current.copyWith(players: players);
   }
 
-  /// Refuse l'arme proposée : la carte est détruite (la case est déjà
-  /// vidée — retours playtest 10/09/2026).
-  void declinePendingWeapon() => pendingWeaponOffer = null;
+  /// Refuse l'arme proposée : la carte est re-déposée ailleurs sur la
+  /// planète — elle reste trouvable (unicité des cartes, 11/10).
+  void declinePendingWeapon() {
+    final Weapon? declined = pendingWeaponOffer;
+    pendingWeaponOffer = null;
+    if (declined != null && state != null) {
+      _relocateDeclinedCard(weapon: declined);
+    }
+  }
 
-  /// Refuse la tenue proposée : la carte est détruite.
-  void declinePendingArmor() => pendingArmorOffer = null;
+  /// Refuse la tenue proposée : la carte est re-déposée ailleurs sur la
+  /// planète — elle reste trouvable (unicité des cartes, 11/10).
+  void declinePendingArmor() {
+    final Armor? declined = pendingArmorOffer;
+    pendingArmorOffer = null;
+    if (declined != null && state != null) {
+      _relocateDeclinedCard(armor: declined);
+    }
+  }
 
   /// Défausse l'arme en réserve.
   void discardStoredWeapon() {
@@ -1691,6 +1772,8 @@ class GameController extends Notifier<GameState?> {
       doubleMonstersUnlocked: next.players
           .any((Player p) => !p.eliminated && p.level >= 4),
       allyBiasPlayer: nextPlayer,
+      // Unicité des cartes (11/10) : ne pas tirer les cartes possédées.
+      takenCardNames: _takenCardNames(next),
     );
     final Map<PlanetType, Planet> planetsNext =
         <PlanetType, Planet>{...next.planets, nextPlanet.type: populate.planet};
@@ -2227,6 +2310,46 @@ class GameController extends Notifier<GameState?> {
     }
     if (!PlanetConstants.startPlanets.contains(planet)) return null;
     return _mapService.patapucheAnchorFor(s.seed);
+  }
+
+  /// UNICITÉ DES CARTES (retours playtest 11/10) : noms des cartes
+  /// possédées par au moins un joueur NON éliminé (équipe + réserve) —
+  /// alliés hors escouades, armes, tenues. Les escouades y figurent dès
+  /// que 10 exemplaires au TOTAL (tous joueurs confondus, réserve
+  /// incluse) sont détenues. Ces cartes ne doivent plus être tirées par
+  /// le peuplement ; les cartes d'un joueur éliminé sont remises en jeu.
+  Set<String> _takenCardNames(GameState s) {
+    final Set<String> names = <String>{};
+    final Map<String, int> squadCopies = <String, int>{};
+    void collect(Player p) {
+      for (final Ally ally in p.allies) {
+        if (ally.type == AllyType.escouade) {
+          squadCopies[ally.name] = (squadCopies[ally.name] ?? 0) + 1;
+        } else {
+          names.add(ally.name);
+        }
+      }
+      final Ally? stored = p.storedAlly;
+      if (stored != null) {
+        if (stored.type == AllyType.escouade) {
+          squadCopies[stored.name] = (squadCopies[stored.name] ?? 0) + 1;
+        } else {
+          names.add(stored.name);
+        }
+      }
+      if (p.weapon != null) names.add(p.weapon!.name);
+      if (p.storedWeapon != null) names.add(p.storedWeapon!.name);
+      if (p.armor != null) names.add(p.armor!.name);
+      if (p.storedArmor != null) names.add(p.storedArmor!.name);
+    }
+
+    for (final Player p in s.players) {
+      if (!p.eliminated) collect(p);
+    }
+    for (final MapEntry<String, int> e in squadCopies.entries) {
+      if (e.value >= GameConstants.squadMaxCopies) names.add(e.key);
+    }
+    return names;
   }
 
   /// Déplacement de Patapuche à CHAQUE fin de tour : une case au hasard

@@ -72,6 +72,11 @@ class GameConstants {
   /// 10 places d'équipe ; le personnage principal ne consomme aucune place.
   static const int teamCapacity = 10;
 
+  /// UNICITÉ DES CARTES (retours playtest 11/10) : nombre total
+  /// d'exemplaires d'une ESCOUADE (tous joueurs confondus) au-delà
+  /// duquel elle ne sort plus sur le plateau.
+  static const int squadMaxCopies = 10;
+
   // ---------------------------------------------------------------------------
   // Monstres (GDD §10) — utilisés à partir du Sprint 3
   // ---------------------------------------------------------------------------
