@@ -100,10 +100,12 @@ Set<String> _drawnNames({
 
 /// Vraie partie + marche aléatoire (sans combat ni voyage) de [steps]
 /// déplacements, en refusant les cartes rencontrées. Renvoie la planète
-/// finale (Hothe) pour scan.
+/// finale (Hothe) pour scan. [seedWeapons] : armes posées d'office sur
+/// des cases libres au départ (pour compter les exemplaires en existence).
 Future<Planet> _walkAndScan({
   required List<Player> players,
   int steps = 14,
+  List<Weapon> seedWeapons = const <Weapon>[],
 }) async {
   final ProviderContainer container = _container(7);
   addTearDown(container.dispose);
@@ -127,7 +129,7 @@ Future<Planet> _walkAndScan({
     for (int i = 0; i < created.players.length; i++)
       players[i].copyWith(position: created.players[i].position),
   ];
-  final Planet cleaned = created.currentPlanet.withTiles(<Tile>[
+  Planet cleaned = created.currentPlanet.withTiles(<Tile>[
     for (final Tile t in created.currentPlanet.tiles)
       t.copyWith(
         clearAlly: true,
@@ -136,6 +138,29 @@ Future<Planet> _walkAndScan({
         healSite: false,
       ),
   ]);
+  // Armes à SEMER : posées sur les premières cases libres hors départs.
+  if (seedWeapons.isNotEmpty) {
+    final List<Tile> seeded = List<Tile>.of(cleaned.tiles);
+    int placed = 0;
+    for (int i = 0;
+        i < seeded.length && placed < seedWeapons.length;
+        i++) {
+      final Tile t = seeded[i];
+      if (!t.walkable ||
+          BoardConstants.startPositions.contains(Position(t.x, t.y)) ||
+          t.monster != null ||
+          t.ally != null ||
+          t.weapon != null ||
+          t.armor != null ||
+          t.healSite ||
+          t.cantina) {
+        continue;
+      }
+      seeded[i] = t.copyWith(weapon: seedWeapons[placed]);
+      placed++;
+    }
+    cleaned = cleaned.withTiles(seeded);
+  }
   created = created.copyWith(
     players: placed,
     currentPlanet: cleaned,
@@ -501,9 +526,10 @@ void main() {
       return (controller, container, targets);
     }
 
-    test('tenue mise en RÉSERVE : le second exemplaire quitte le plateau',
-        () {
-      final Armor armor = CardConstants.armors.first;
+    test('tenue RARE mise en RÉSERVE : le second exemplaire quitte le '
+        'plateau (plafond 1)', () {
+      final Armor armor = CardConstants.armors
+          .firstWhere((Armor a) => a.rarity == Rarity.rare);
       final (GameController controller, ProviderContainer container,
           List<Position> targets) = twoCopies(
         place: (Tile t) => t.copyWith(armor: armor),
@@ -522,10 +548,11 @@ void main() {
               'sur le plateau (le scénario du playtest)');
     });
 
-    test('arme ÉQUIPÉE : le second exemplaire quitte le plateau', () {
-      // Une arme COMMUNE : l'equipement est bloque par rarete au niveau 4.
+    test('arme RARE ÉQUIPÉE : le second exemplaire quitte le plateau '
+        '(plafond 1)', () {
+      // Une arme RARE : plafond GDD 1 exemplaire → purge dès la prise.
       final Weapon weapon = CardConstants.weapons
-          .firstWhere((Weapon w) => w.rarity == Rarity.commun);
+          .firstWhere((Weapon w) => w.rarity == Rarity.rare);
       final (GameController controller, ProviderContainer container,
           List<Position> targets) = twoCopies(
         place: (Tile t) => t.copyWith(weapon: weapon),
@@ -540,6 +567,32 @@ void main() {
           container.read(gameControllerProvider)!.currentPlanet;
       expect(after.tiles.where((Tile t) =>
           t.weapon?.name == weapon.name).length, 0);
+    });
+
+    test('arme COMMUNE équipée (1 exemplaire sur 2) : le second RESTE '
+        'trouvable — raccord GDD', () {
+      // Raccord GDD (Données cartes.xlsx) : les communs existent en 2
+      // cartes. Équiper le premier NE purge PAS le second.
+      final Weapon weapon = CardConstants.weapons
+          .firstWhere((Weapon w) => w.rarity == Rarity.commun);
+      final (GameController controller, ProviderContainer container,
+          List<Position> targets) = twoCopies(
+        place: (Tile t) => t.copyWith(weapon: weapon),
+      );
+      addTearDown(container.dispose);
+
+      expect(controller.moveActivePlayerTo(targets[0].x, targets[0].y),
+          MoveResult.itemEncounter);
+      expect(controller.equipPendingWeapon(), isTrue);
+
+      final Planet after =
+          container.read(gameControllerProvider)!.currentPlanet;
+      expect(
+        after.tileAt(targets[1].x, targets[1].y).weapon?.name,
+        weapon.name,
+        reason: '1 exemplaire possédé sur 2 : le second reste sur le '
+            'plateau',
+      );
     });
 
     test('allié RECRUTÉ : le second exemplaire quitte le plateau', () {
@@ -590,7 +643,9 @@ void main() {
 
     test('vieille sauvegarde : marcher sur une carte DÉJÀ possédée ne '
         'rouvre aucune offre, la copie disparaît', () {
-      final Armor armor = CardConstants.armors.first;
+      // Tenue RARE (plafond 1) : possédée → toute copie posée disparaît.
+      final Armor armor = CardConstants.armors
+          .firstWhere((Armor a) => a.rarity == Rarity.rare);
       final (GameController controller, ProviderContainer container,
           List<Position> targets) = twoCopies(
         place: (Tile t) => t.copyWith(armor: armor),
@@ -620,6 +675,62 @@ void main() {
       expect(container.read(gameControllerProvider)!.players[0].storedArmor,
           isNotNull,
           reason: 'la possession du joueur est intacte');
+    });
+
+    test('tenue COMMUNE possédée 2 fois (2 joueurs) : plus aucune copie '
+        'sur le plateau (plafond GDD 2 atteint)', () {
+      final Armor armor = CardConstants.armors
+          .firstWhere((Armor a) => a.rarity == Rarity.commun);
+      final (GameController controller, ProviderContainer container,
+          List<Position> targets) = twoCopies(
+        place: (Tile t) => t.copyWith(armor: armor),
+      );
+      addTearDown(container.dispose);
+      // Deux joueurs NON éliminés la possèdent chacun : 2/2 → plafond.
+      final GameState s = container.read(gameControllerProvider)!;
+      controller.state = s.copyWith(
+        players: <Player>[
+          s.players[0].copyWith(storedArmor: armor),
+          s.players[0].copyWith(
+            id: 'p2',
+            name: 'Joueur 2',
+            storedArmor: armor,
+          ),
+        ],
+      );
+
+      final MoveResult result =
+          controller.moveActivePlayerTo(targets[0].x, targets[0].y);
+      expect(result, MoveResult.moved,
+          reason: 'plafond 2/2 atteint : la copie posée disparaît sans '
+              'effet');
+      expect(
+        container.read(gameControllerProvider)!.currentPlanet.tiles
+            .where((Tile t) => t.armor?.name == armor.name)
+            .length,
+        0,
+        reason: 'purge de la copie posée',
+      );
+    });
+
+    test('2 exemplaires POSÉS d\'un commun, 0 possédé : le tirage n\'en '
+        'produit pas de 3e', () async {
+      final Weapon weapon = CardConstants.weapons
+          .firstWhere((Weapon w) => w.rarity == Rarity.commun);
+      bool leaked = false;
+      for (int run = 0; run < 8; run++) {
+        final Planet planet = await _walkAndScan(
+          players: <Player>[_player(index: 0), _player(index: 1)],
+          seedWeapons: <Weapon>[weapon, weapon],
+        );
+        final int count = planet.tiles
+            .where((Tile t) => t.weapon?.name == weapon.name)
+            .length;
+        if (count > 2) leaked = true;
+      }
+      expect(leaked, isFalse,
+          reason: 'les 2 cartes GDD existent déjà sur le plateau : '
+              'aucun tirage supplémentaire');
     });
   });
 }

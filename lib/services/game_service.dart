@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/constants/board_constants.dart';
+import '../core/constants/card_constants.dart';
 import '../core/constants/character_constants.dart';
 import '../core/constants/planet_constants.dart'
     show PlanetConstants;
@@ -538,7 +539,7 @@ class GameController extends Notifier<GameState?> {
       // Ratio allié ami/ennemi selon le niveau du joueur actif (20/09).
       allyBiasPlayer: movingBefore,
       // Unicité des cartes (11/10) : ne pas tirer les cartes possédées.
-      takenCardNames: _takenCardNames(current),
+      takenCardNames: _unavailableCardNames(current),
     );
 
     // Planètes secondaires dévoilées par un portail découvert (Sprint 5).
@@ -600,8 +601,9 @@ class GameController extends Notifier<GameState?> {
       // UNICITÉ (fix 11/10 v2) : copie préexistante d'une carte déjà
       // possédée par un joueur (vieille sauvegarde) — plus rien ne se
       // passe, la copie disparaît (ni recrutement, ni attaque).
-      if (_takenCardNames(current).contains(offered.name)) {
+      if (_fullyOwnedCardNames(current).contains(offered.name)) {
         _clearTileEvent(populate.planet, target, TileEventKind.ally);
+        _purgeBoardCopies(ally: offered);
         return MoveResult.moved;
       }
       pendingSpecialDamage = null;
@@ -658,7 +660,7 @@ class GameController extends Notifier<GameState?> {
       // SEULEMENT si personne ne la possède — possédée par un joueur
       // (amie pour SA faction), elle ne doit plus exister sur le plateau ;
       // le filtre de tirage l'empêche de toute façon de ressusciter.
-      if (enemyAlly && !_takenCardNames(state!).contains(offered.name)) {
+      if (enemyAlly && !_fullyOwnedCardNames(state!).contains(offered.name)) {
         _relocateDeclinedCard(ally: offered);
       }
       return MoveResult.allyEncounter;
@@ -667,8 +669,9 @@ class GameController extends Notifier<GameState?> {
       final Weapon weapon = targetTile.weapon!;
       // UNICITÉ (fix 11/10 v2) : copie préexistante d'une arme déjà
       // possédée — la copie disparaît, aucune offre.
-      if (_takenCardNames(current).contains(weapon.name)) {
+      if (_fullyOwnedCardNames(current).contains(weapon.name)) {
         _clearTileEvent(populate.planet, target, TileEventKind.weapon);
+        _purgeBoardCopies(weapon: weapon);
         return MoveResult.moved;
       }
       if (weapon.rarity.index >= Rarity.epique.index) {
@@ -683,8 +686,9 @@ class GameController extends Notifier<GameState?> {
       final Armor armor = targetTile.armor!;
       // UNICITÉ (fix 11/10 v2) : copie préexistante d'une tenue déjà
       // possédée — la copie disparaît, aucune offre.
-      if (_takenCardNames(current).contains(armor.name)) {
+      if (_fullyOwnedCardNames(current).contains(armor.name)) {
         _clearTileEvent(populate.planet, target, TileEventKind.armor);
+        _purgeBoardCopies(armor: armor);
         return MoveResult.moved;
       }
       if (armor.rarity.index >= Rarity.epique.index) {
@@ -1082,7 +1086,7 @@ class GameController extends Notifier<GameState?> {
           .any((Player p) => !p.eliminated && p.level >= 4),
       allyBiasPlayer: players[index],
       // Unicité des cartes (11/10) : ne pas tirer les cartes possédées.
-      takenCardNames: _takenCardNames(current),
+      takenCardNames: _unavailableCardNames(current),
     );
     secondary = populate.planet;
 
@@ -1805,7 +1809,7 @@ class GameController extends Notifier<GameState?> {
           .any((Player p) => !p.eliminated && p.level >= 4),
       allyBiasPlayer: nextPlayer,
       // Unicité des cartes (11/10) : ne pas tirer les cartes possédées.
-      takenCardNames: _takenCardNames(next),
+      takenCardNames: _unavailableCardNames(next),
     );
     final Map<PlanetType, Planet> planetsNext =
         <PlanetType, Planet>{...next.planets, nextPlanet.type: populate.planet};
@@ -2344,45 +2348,82 @@ class GameController extends Notifier<GameState?> {
     return _mapService.patapucheAnchorFor(s.seed);
   }
 
-  /// UNICITÉ DES CARTES (retours playtest 11/10) : noms des cartes
-  /// possédées par au moins un joueur NON éliminé (équipe + réserve) —
-  /// alliés hors escouades, armes, tenues. Les escouades y figurent dès
-  /// que 10 exemplaires au TOTAL (tous joueurs confondus, réserve
-  /// incluse) sont détenues. Ces cartes ne doivent plus être tirées par
-  /// le peuplement ; les cartes d'un joueur éliminé sont remises en jeu.
-  Set<String> _takenCardNames(GameState s) {
-    final Set<String> names = <String>{};
-    final Map<String, int> squadCopies = <String, int>{};
-    void collect(Player p) {
-      for (final Ally ally in p.allies) {
-        if (ally.type == AllyType.escouade) {
-          squadCopies[ally.name] = (squadCopies[ally.name] ?? 0) + 1;
-        } else {
-          names.add(ally.name);
-        }
+  /// UNICITÉ DES CARTES, raccord GDD (Données cartes.xlsx — 12/10) :
+  /// plafonds d'exemplaires par carte — armes et tenues COMMUNES : 2 ;
+  /// rare+ et alliés hors escouades : 1 ; escouades : 10. Une carte est
+  /// « prise » quand son compte atteint le plafond. Les exemplaires
+  /// comptés appartiennent à des joueurs NON éliminés (équipe + réserve),
+  /// et — si [includeBoard] — sont aussi posés sur les plateaux.
+  Set<String> _cardNamesAtLimit(GameState s, {required bool includeBoard}) {
+    final Map<String, int> counts = <String, int>{};
+    final Map<String, int> maxCopies = <String, int>{};
+    void count(String name, int max) {
+      counts[name] = (counts[name] ?? 0) + 1;
+      maxCopies[name] = max;
+    }
+
+    void countAlly(Ally ally) {
+      if (ally.type == AllyType.escouade) {
+        count(ally.name, GameConstants.squadMaxCopies);
+      } else {
+        count(ally.name, 1);
       }
-      final Ally? stored = p.storedAlly;
-      if (stored != null) {
-        if (stored.type == AllyType.escouade) {
-          squadCopies[stored.name] = (squadCopies[stored.name] ?? 0) + 1;
-        } else {
-          names.add(stored.name);
-        }
-      }
-      if (p.weapon != null) names.add(p.weapon!.name);
-      if (p.storedWeapon != null) names.add(p.storedWeapon!.name);
-      if (p.armor != null) names.add(p.armor!.name);
-      if (p.storedArmor != null) names.add(p.storedArmor!.name);
     }
 
     for (final Player p in s.players) {
-      if (!p.eliminated) collect(p);
+      if (p.eliminated) continue; // éliminé : ses cartes retournent en jeu
+      for (final Ally ally in p.allies) {
+        countAlly(ally);
+      }
+      final Ally? stored = p.storedAlly;
+      if (stored != null) countAlly(stored);
+      if (p.weapon != null) {
+        count(p.weapon!.name,
+            CardConstants.weaponCardCount(p.weapon!));
+      }
+      if (p.storedWeapon != null) {
+        count(p.storedWeapon!.name,
+            CardConstants.weaponCardCount(p.storedWeapon!));
+      }
+      if (p.armor != null) {
+        count(p.armor!.name, CardConstants.armorCardCount(p.armor!));
+      }
+      if (p.storedArmor != null) {
+        count(p.storedArmor!.name,
+            CardConstants.armorCardCount(p.storedArmor!));
+      }
     }
-    for (final MapEntry<String, int> e in squadCopies.entries) {
-      if (e.value >= GameConstants.squadMaxCopies) names.add(e.key);
+    if (includeBoard) {
+      // Exemplaires posés : les 2 cartes GDD d'un commun peuvent être sur
+      // le plateau en même temps — aucun 3e tirage tant qu'elles existent.
+      for (final Planet planet in s.planets.values) {
+        for (final Tile t in planet.tiles) {
+          if (t.ally != null) countAlly(t.ally!);
+          if (t.weapon != null) {
+            count(t.weapon!.name, CardConstants.weaponCardCount(t.weapon!));
+          }
+          if (t.armor != null) {
+            count(t.armor!.name, CardConstants.armorCardCount(t.armor!));
+          }
+        }
+      }
     }
-    return names;
+    final Set<String> taken = <String>{};
+    for (final MapEntry<String, int> e in counts.entries) {
+      if (e.value >= maxCopies[e.key]!) taken.add(e.key);
+    }
+    return taken;
   }
+
+  /// Cartes dont le plafond est atteint PAR LA POSSESSION seule —
+  /// déclencheur de la purge et garde de rencontre (un 1er commun rangé
+  /// ne doit pas purger le 2e, encore trouvable).
+  Set<String> _fullyOwnedCardNames(GameState s) =>
+      _cardNamesAtLimit(s, includeBoard: false);
+
+  /// Cartes indisponibles pour le TIRAGE : possédées + posées.
+  Set<String> _unavailableCardNames(GameState s) =>
+      _cardNamesAtLimit(s, includeBoard: true);
 
   /// UNICITÉ DES CARTES (fix 11/10 v2 — « le doublon à moitié ») : une
   /// carte qui vient d'être prise par un joueur ne doit plus exister
@@ -2394,7 +2435,7 @@ class GameController extends Notifier<GameState?> {
   /// plafond de 10 exemplaires reste trouvables.
   void _purgeBoardCopies({Ally? ally, Weapon? weapon, Armor? armor}) {
     final GameState s = state!;
-    final Set<String> taken = _takenCardNames(s);
+    final Set<String> taken = _fullyOwnedCardNames(s);
     final String? allyName =
         (ally != null && taken.contains(ally.name)) ? ally.name : null;
     final String? weaponName =
